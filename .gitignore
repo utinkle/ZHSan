@@ -310,3 +310,7 @@ Output/
 References/Win/steam_appid.txt
 
 MODs
+
+build/
+*/build/
+.vscode/
