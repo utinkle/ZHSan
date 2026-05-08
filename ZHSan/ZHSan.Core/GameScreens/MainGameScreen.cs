@@ -21,6 +21,13 @@ using WorldOfTheThreeKingdoms.GameScreens.ScreenLayers;
 using WorldOfTheThreeKingdoms.Resources;
 using Platforms;
 using GameManager;
+using ZHSan.Core.Infrastructure.Runtime;
+using ZHSan.Core.Infrastructure.FeatureFlags;
+using ZHSan.Core.Presentation.UI.Adapters;
+using ZHSan.Core.Presentation.UI.ViewModels;
+using ZHSan.Core.Presentation.UI.Services;
+using ZHSan.Core.Presentation.UI.TabList;
+using ZHSan.Core.Presentation.UI;
 
 //using GameObjects.PersonDetail.PersonMessages;
 
@@ -81,6 +88,16 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public DantiaoLayer dantiaoLayer = null;
 
+        private MyraUiRuntime myraUiRuntime;
+        private FeatureFlags featureFlags;
+        private UiThemeService uiThemeService;
+        private UiNavigationService uiNavigationService;
+        private UiDialogService uiDialogService;
+        private UiContextMenuService uiContextMenuService;
+        private TabListDescriptorService tabListDescriptorService;
+        private TabListQueryProfileProvider tabListQueryProfileProvider;
+        private TabListQueryDescriptor currentTabListQuery;
+
         public MainGameScreen()
             : base()
         {
@@ -113,6 +130,15 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.UpdateCount = 0;
 
             this.screenManager = new ScreenManager();
+            this.myraUiRuntime = RuntimeBootstrap.Services?.Resolve<MyraUiRuntime>();
+            this.featureFlags = RuntimeBootstrap.Services?.Resolve<FeatureFlags>();
+            this.uiThemeService = RuntimeBootstrap.Services?.Resolve<UiThemeService>();
+            this.uiNavigationService = RuntimeBootstrap.Services?.Resolve<UiNavigationService>();
+            this.uiDialogService = RuntimeBootstrap.Services?.Resolve<UiDialogService>();
+            this.uiContextMenuService = RuntimeBootstrap.Services?.Resolve<UiContextMenuService>();
+            this.tabListDescriptorService = RuntimeBootstrap.Services?.Resolve<TabListDescriptorService>();
+            this.tabListQueryProfileProvider = RuntimeBootstrap.Services?.Resolve<TabListQueryProfileProvider>();
+            this.myraUiRuntime?.Initialize();
             
             //Session.Current.Scenario = new GameScenario(this);
             //this.LoadCommonData();
@@ -193,6 +219,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             //Begin(SpriteSortMode.Deferred);
             //Begin(SpriteBlendMode.AlphaBlend, SpriteSortMode.BackToFront, SaveStateMode.None);
             this.Drawing(gameTime);
+            this.myraUiRuntime?.Draw();
             //End();
         }
 
@@ -227,6 +254,10 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public void DrawDialog()
         {
+            if (this.Plugins.HelpPlugin.IsShowing)
+            {
+                this.ShowHelpDialogByBridge(new HelpDialogViewModel { Position = ShowPosition.Center });
+            }
             this.Plugins.HelpPlugin.Draw();
             this.Plugins.OptionDialogPlugin.Draw();
             this.Plugins.SimpleTextDialogPlugin.Draw();
@@ -924,7 +955,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                             {
                                 person.OutsideDestination = new Point?(this.selectingLayer.SelectedPoint);
                             }
-                            this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetConvinceDestinationPerson, false, true, true, false, architectureByPosition.GetConvinceDestinationPersonList((this.CurrentPersons[0] as Person).BelongedFaction), null, "说服", "Personal");
+                            this.ShowPersonDetailTabList(FrameFunction.GetConvinceDestinationPerson, architectureByPosition.GetConvinceDestinationPersonList((this.CurrentPersons[0] as Person).BelongedFaction), null, "说服");
                         }
                     }
                     return;
@@ -940,7 +971,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                             {
                                 person.OutsideDestination = new Point?(this.selectingLayer.SelectedPoint);
                             }
-                            this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetAssassinatePersonTarget, false, true, true, false, architectureByPosition.GetAssassinatePersonTarget((this.CurrentPersons[0] as Person).BelongedFaction), null, "暗杀", "Personal");
+                            this.ShowPersonDetailTabList(FrameFunction.GetAssassinatePersonTarget, architectureByPosition.GetAssassinatePersonTarget((this.CurrentPersons[0] as Person).BelongedFaction), null, "暗杀");
                         }
                     }
                     return;
@@ -1661,8 +1692,12 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public override void SaveGame()
         {
-            this.Plugins.OptionDialogPlugin.SetStyle("SaveAndLoad");
-            this.Plugins.OptionDialogPlugin.SetTitle("存储进度");
+            var optionDialogViewModel = new OptionDialogViewModel
+            {
+                Style = "SaveAndLoad",
+                Title = "存储进度",
+                Position = ShowPosition.Center
+            };
             this.Plugins.OptionDialogPlugin.Clear();
 
             //throw new Exception("SaveGame");
@@ -1680,7 +1715,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.Plugins.OptionDialogPlugin.AddOption(saves[i].Summary, null, voidFunction);
             }
             this.Plugins.OptionDialogPlugin.EndAddOptions();
-            this.Plugins.OptionDialogPlugin.ShowOptionDialog(ShowPosition.Center);
+            this.ShowOptionDialogByBridge(optionDialogViewModel);
         }
 
         public void SaveGameToDisk(string LoadedFileName)
@@ -2009,17 +2044,42 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.Plugins.FactionTechniquesPlugin.IsShowing = true;
         }
 
+        private void PrepareTabListDescriptor(FrameKind kind, FrameFunction function, string title, string tabName)
+        {
+            if (this.tabListDescriptorService == null) return;
+            this.currentTabListQuery = this.tabListQueryProfileProvider?.CreateDefaultQuery(kind, function, this.tabListDescriptorService, title, tabName);
+            if (this.currentTabListQuery == null)
+            {
+                this.currentTabListQuery = this.tabListDescriptorService.CreateQuery(null);
+            }
+        }
+
+        private void ApplyTabListDescriptor(ref string title, ref string tabName)
+        {
+            if (this.currentTabListQuery == null) return;
+
+            foreach (var filter in this.currentTabListQuery.Filters)
+            {
+                if (filter.ColumnId == "status" && !string.IsNullOrWhiteSpace(filter.Keyword))
+                {
+                    title = filter.Keyword;
+                }
+                else if (filter.ColumnId == "name" && !string.IsNullOrWhiteSpace(filter.Keyword))
+                {
+                    tabName = filter.Keyword;
+                }
+            }
+        }
+
         public void ShowTabListInFrame(UndoneWorkKind undoneWork, FrameKind kind, FrameFunction function, bool OKEnabled, bool CancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName)
         {
+            this.PrepareTabListDescriptor(kind, function, title, tabName);
+            var effectiveTitle = title;
+            var effectiveTabName = tabName;
+            this.ApplyTabListDescriptor(ref effectiveTitle, ref effectiveTabName);
             if ((gameObjectList != null) && (gameObjectList.Count != 0))
             {
-                this.Plugins.GameFramePlugin.Kind = kind;
-                this.Plugins.GameFramePlugin.Function = function;
-                this.Plugins.TabListPlugin.InitialValues(gameObjectList, selectedObjectList, InputManager.NowMouse.ScrollWheelValue, title);
-                this.Plugins.TabListPlugin.SetListKindByName(kind.ToString(), showCheckBox, multiselecting);
-                this.Plugins.TabListPlugin.SetSelectedTab(tabName);
-                this.Plugins.GameFramePlugin.SetFrameContent(this.Plugins.TabListPlugin.TabList, base.viewportSizeFull);
-                
+                this.PrepareTabListFrame(kind, function, showCheckBox, multiselecting, gameObjectList, selectedObjectList, effectiveTitle, effectiveTabName);
                 this.Plugins.GameFramePlugin.OKButtonEnabled = OKEnabled;
                 this.Plugins.GameFramePlugin.CancelButtonEnabled = CancelEnabled;
                 this.Plugins.GameFramePlugin.IsShowing = true;
@@ -2028,19 +2088,53 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public void SetTabListInFrame(UndoneWorkKind undoneWork, FrameKind kind, FrameFunction function, bool OKEnabled, bool CancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName)
         {
+            this.PrepareTabListDescriptor(kind, function, title, tabName);
+            var effectiveTitle = title;
+            var effectiveTabName = tabName;
+            this.ApplyTabListDescriptor(ref effectiveTitle, ref effectiveTabName);
             if ((gameObjectList != null) && (gameObjectList.Count != 0))
             {
-                this.Plugins.GameFramePlugin.Kind = kind;
-                this.Plugins.GameFramePlugin.Function = function;
-                this.Plugins.TabListPlugin.InitialValues(gameObjectList, selectedObjectList, InputManager.NowMouse.ScrollWheelValue, title);
-                this.Plugins.TabListPlugin.SetListKindByName(kind.ToString(), showCheckBox, multiselecting);
-                this.Plugins.TabListPlugin.SetSelectedTab(tabName);
-                this.Plugins.GameFramePlugin.SetFrameContent(this.Plugins.TabListPlugin.TabList, base.viewportSizeFull);
+                this.PrepareTabListFrame(kind, function, showCheckBox, multiselecting, gameObjectList, selectedObjectList, effectiveTitle, effectiveTabName);
 
                 this.Plugins.GameFramePlugin.OKButtonEnabled = OKEnabled;
                 this.Plugins.GameFramePlugin.CancelButtonEnabled = CancelEnabled;
                 //this.Plugins.GameFramePlugin.IsShowing = true;
             }
+        }
+
+        private void PrepareTabListFrame(FrameKind kind, FrameFunction function, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName)
+        {
+            this.Plugins.GameFramePlugin.Kind = kind;
+            this.Plugins.GameFramePlugin.Function = function;
+            this.Plugins.TabListPlugin.InitialValues(gameObjectList, selectedObjectList, InputManager.NowMouse.ScrollWheelValue, title);
+            this.Plugins.TabListPlugin.SetListKindByName(kind.ToString(), showCheckBox, multiselecting);
+            this.Plugins.TabListPlugin.SetSelectedTab(tabName);
+            if (this.Plugins.TabListPlugin is TabListPlugin.TabListPlugin concreteTabList)
+            {
+                concreteTabList.ApplyQueryDescriptor(this.currentTabListQuery);
+            }
+            this.Plugins.GameFramePlugin.SetFrameContent(this.Plugins.TabListPlugin.TabList, base.viewportSizeFull);
+        }
+
+        private void ShowPersonDetailTabList(FrameFunction function, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title)
+        {
+            this.ShowDetailTabListByKind(FrameKind.Person, function, gameObjectList, selectedObjectList, title, "Personal");
+        }
+
+        private void ShowDetailTabListByKind(FrameKind kind, FrameFunction function, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string defaultTabName)
+        {
+            this.ShowTabListInFrame(
+               UndoneWorkKind.Frame,
+               kind,
+               function,
+               false,
+               true,
+               true,
+               false,
+               gameObjectList,
+               selectedObjectList,
+               title,
+               defaultTabName);
         }
 
         public void ShowMapViewSelector(bool multiSelecting, GameObjectList gameObjectList, GameDelegates.VoidFunction function, MapViewSelectorKind mapViewSelectorKind)
@@ -2299,7 +2393,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
 
 
-                            this.Plugins.ConfirmationDialogPlugin.IsShowing = true;
+                            this.ShowConfirmationDialogByBridge();
                         }
                     }
                     else
@@ -2677,7 +2771,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.Plugins.ConfirmationDialogPlugin.AddYesFunction(new GameDelegates.VoidFunction(this.DemolishCurrentRouteway));
                 this.Plugins.ConfirmationDialogPlugin.SetPosition(ShowPosition.Center);
                 this.Plugins.SimpleTextDialogPlugin.SetBranch("DemolishRouteway");
-                this.Plugins.ConfirmationDialogPlugin.IsShowing = true;
+                this.ShowConfirmationDialogByBridge();
             }
         }
 
@@ -2699,6 +2793,21 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             }            
         }
 
+        private void ShowHelpDialogByBridge(HelpDialogViewModel viewModel)
+        {
+            this.uiDialogService?.ShowHelp(this.Plugins.HelpPlugin, viewModel, this.uiThemeService, this.uiNavigationService);
+        }
+
+        private void ShowOptionDialogByBridge(OptionDialogViewModel viewModel)
+        {
+            this.uiDialogService?.ShowOption(this.Plugins.OptionDialogPlugin, viewModel);
+        }
+
+        private void ShowConfirmationDialogByBridge()
+        {
+            this.uiDialogService?.ShowConfirmation(this.Plugins.ConfirmationDialogPlugin, new ConfirmationDialogViewModel { Position = ShowPosition.Center });
+        }
+
         public override void TryToExit()
         {
             if (!this.Plugins.tupianwenziPlugin.IsShowing)
@@ -2708,7 +2817,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.Plugins.ConfirmationDialogPlugin.AddYesFunction(new GameDelegates.VoidFunction(this.saveBeforeExit));
                 this.Plugins.ConfirmationDialogPlugin.SetPosition(ShowPosition.Center);
                 this.Plugins.SimpleTextDialogPlugin.SetBranch(Session.GlobalVariables.HardcoreMode ? "ExitSaveGame" : (Session.Current.Scenario.JustSaved ? "ExitGameNoReminder" : "ExitGame"));
-                this.Plugins.ConfirmationDialogPlugin.IsShowing = true;
+                this.ShowConfirmationDialogByBridge();
             }
         }
 
@@ -2753,6 +2862,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public override void Update(GameTime gameTime)   //视野内容更新
         {
+            this.myraUiRuntime?.Update();
             if (toggleScreen)
             {
                 toggleScreenTime += Convert.ToSingle(gameTime.ElapsedGameTime.TotalSeconds);
@@ -3657,7 +3767,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.Plugins.ConfirmationDialogPlugin.AddYesFunction(new GameDelegates.VoidFunction(this.ReturnToMainMenu));
             this.Plugins.ConfirmationDialogPlugin.SetPosition(ShowPosition.Center);
             this.Plugins.SimpleTextDialogPlugin.SetBranch("退回初始");
-            this.Plugins.ConfirmationDialogPlugin.IsShowing = true;
+            this.ShowConfirmationDialogByBridge();
         }
 
         public void ReturnToMainMenu()
@@ -3688,10 +3798,8 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             {
                 if (!(this.Plugins.ContextMenuPlugin.IsShowing || !Session.Current.Scenario.CurrentPlayer.Controlling))
                 {
-                    this.Plugins.ContextMenuPlugin.IsShowing = true;
-                    this.Plugins.ContextMenuPlugin.SetCurrentGameObject(this);
-                    this.Plugins.ContextMenuPlugin.SetMenuKindByName("ArchitectureTroopLeftClick");
-                    this.Plugins.ContextMenuPlugin.Prepare(this.SelectorStartPosition.X, this.SelectorStartPosition.Y, base.viewportSize);
+                    this.uiContextMenuService?.OpenArchitectureTroopLeftClick(this.Plugins.ContextMenuPlugin, this,
+                        this.SelectorStartPosition, base.viewportSize);
                     this.bianduiLiebiaoBiaoji = "ArchitectureTroopLeftClick";
                 }
             }
@@ -3699,10 +3807,8 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             {
                 if (!this.Plugins.ContextMenuPlugin.IsShowing && Session.Current.Scenario.IsPlayerControlling())
                 {
-                    this.Plugins.ContextMenuPlugin.IsShowing = true;
-                    this.Plugins.ContextMenuPlugin.SetCurrentGameObject(this.CurrentTroop);
-                    this.Plugins.ContextMenuPlugin.SetMenuKindByName("TroopLeftClick");
-                    this.Plugins.ContextMenuPlugin.Prepare(this.SelectorStartPosition.X, this.SelectorStartPosition.Y, base.viewportSize);
+                    this.uiContextMenuService?.OpenTroopLeftClick(this.Plugins.ContextMenuPlugin, this.CurrentTroop,
+                        this.SelectorStartPosition, base.viewportSize);
                     this.bianduiLiebiaoBiaoji = "TroopLeftClick";
                     if (!this.Plugins.ContextMenuPlugin.IsShowing && (this.CurrentTroop.CutRoutewayDays > 0))
                     {
@@ -3716,10 +3822,8 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             }
             else if (((this.CurrentArchitecture != null) && (this.CurrentArchitecture.BelongedFaction == Session.Current.Scenario.CurrentPlayer)) && !(this.Plugins.ContextMenuPlugin.IsShowing || !Session.Current.Scenario.IsPlayerControlling()))
             {
-                this.Plugins.ContextMenuPlugin.IsShowing = true;
-                this.Plugins.ContextMenuPlugin.SetCurrentGameObject(this.CurrentArchitecture);
-                this.Plugins.ContextMenuPlugin.SetMenuKindByName("ArchitectureLeftClick");
-                this.Plugins.ContextMenuPlugin.Prepare(this.SelectorStartPosition.X, this.SelectorStartPosition.Y, base.viewportSize);
+                this.uiContextMenuService?.OpenArchitectureLeftClick(this.Plugins.ContextMenuPlugin, this.CurrentArchitecture,
+                    this.SelectorStartPosition, base.viewportSize);
 
                 this.bianduiLiebiaoBiaoji = "ArchitectureLeftClick";
                 this.ShowBianduiLiebiao(UndoneWorkKind.None, FrameKind.Military, FrameFunction.Browse, false, true, false, true,

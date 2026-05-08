@@ -9,6 +9,8 @@ using System;
 using System.Collections.Generic;
 //using System.Runtime.InteropServices;
 using System.Xml;
+using System.Reflection;
+using System.Linq;
 
 namespace TabListPlugin
 {
@@ -37,6 +39,8 @@ namespace TabListPlugin
         internal PlatformTexture focusTrackTexture;
         internal Rectangle FullLowerClient;
         internal GameObjectList gameObjectList;
+        internal GameObjectList querySourceGameObjectList;
+        private ZHSan.Core.Presentation.UI.TabList.TabListQueryDescriptor currentQueryForMapping;
         private bool HeightCanShrink = true;
         internal IArchitectureDetail iArchitectureDetail;
         internal IFactionTechniques iFactionTechniques;
@@ -908,6 +912,7 @@ namespace TabListPlugin
         {
             this.ClearData();
             this.gameObjectList = gameObjectList;
+            this.querySourceGameObjectList = CloneGameObjectList(gameObjectList);
             foreach (GameObject obj2 in gameObjectList)
             {
                 obj2.Selected = false;
@@ -1039,6 +1044,200 @@ namespace TabListPlugin
             }
         }
 
+        internal void ApplyQueryDescriptor(ZHSan.Core.Presentation.UI.TabList.TabListQueryDescriptor query)
+        {
+            if (query == null || this.listKindToDisplay == null || this.listKindToDisplay.SelectedTab == null) return;
+            this.currentQueryForMapping = query;
+
+            foreach (var descriptor in query.Columns)
+            {
+                var column = this.listKindToDisplay.SelectedTab.Columns.Find(c => c.Name == descriptor.Id || c.DisplayName == descriptor.Title);
+                if (column != null)
+                {
+                    if (!string.IsNullOrWhiteSpace(descriptor.Title))
+                    {
+                        column.DisplayName = descriptor.Title;
+                    }
+
+                    if (descriptor.Width > 0)
+                    {
+                        column.MinWidth = descriptor.Width;
+                    }
+
+                    if (descriptor.Visible.HasValue)
+                    {
+                        column.CountToDisplay = descriptor.Visible.Value;
+                    }
+
+                    if (descriptor.Numeric.HasValue)
+                    {
+                        column.IsNumber = descriptor.Numeric.Value;
+                    }
+
+                    if (descriptor.SmallToBig.HasValue)
+                    {
+                        column.SmallToBig = descriptor.SmallToBig.Value;
+                    }
+                }
+            }
+
+            var workingSet = (this.querySourceGameObjectList != null && this.querySourceGameObjectList.Count > 0)
+                ? this.querySourceGameObjectList.Cast<GameObject>().ToList()
+                : (this.gameObjectList == null ? new List<GameObject>() : this.gameObjectList.Cast<GameObject>().ToList());
+
+            if (query.Sort != null && !string.IsNullOrWhiteSpace(query.Sort.ColumnId) && workingSet.Count > 1)
+            {
+                workingSet = query.Sort.Descending
+                    ? workingSet.OrderByDescending(o => GetSortValue(o, query.Sort.ColumnId)).ToList()
+                    : workingSet.OrderBy(o => GetSortValue(o, query.Sort.ColumnId)).ToList();
+            }
+
+            if (query.Filters != null && query.Filters.Count > 0)
+            {
+                foreach (var filter in query.Filters)
+                {
+                    if (string.IsNullOrWhiteSpace(filter.ColumnId) || string.IsNullOrWhiteSpace(filter.Keyword))
+                    {
+                        continue;
+                    }
+
+                    var keyword = filter.Keyword.Trim();
+                    workingSet = workingSet
+                        .Where(o => MatchKeyword(o, filter.ColumnId, keyword, filter.MatchMode))
+                        .ToList();
+                }
+            }
+
+            if (query.Page != null && query.Page.PageSize > 0 && workingSet.Count > query.Page.PageSize)
+            {
+                var skip = query.Page.PageIndex * query.Page.PageSize;
+                workingSet = workingSet.Skip(skip).Take(query.Page.PageSize).ToList();
+            }
+
+            if (this.gameObjectList != null)
+            {
+                this.gameObjectList.Clear();
+                foreach (var item in workingSet)
+                {
+                    this.gameObjectList.Add(item);
+                }
+                this.AddRows();
+            }
+
+            this.listKindToDisplay.SelectedTab.ResetTextTextures();
+            this.listKindToDisplay.SelectedTab.ResetAllTextures();
+            this.listKindToDisplay.ReCalculateTabsWidth();
+            this.currentQueryForMapping = null;
+        }
+
+        private GameObjectList CloneGameObjectList(GameObjectList source)
+        {
+            var clone = new GameObjectList();
+            if (source == null)
+            {
+                return clone;
+            }
+
+            foreach (GameObject item in source)
+            {
+                clone.Add(item);
+            }
+
+            return clone;
+        }
+
+        private object GetSortValue(object obj, string columnId)
+        {
+            if (obj == null || string.IsNullOrWhiteSpace(columnId)) return null;
+            var mappedValue = GetMappedFieldValue(obj, columnId);
+            if (mappedValue != null)
+            {
+                return mappedValue;
+            }
+
+            var property = obj.GetType().GetProperty(columnId, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (property != null)
+            {
+                return property.GetValue(obj, null);
+            }
+
+            return obj.ToString();
+        }
+
+        private bool MatchKeyword(GameObject obj, string columnId, string keyword, string matchMode)
+        {
+            var value = GetSortValue(obj, columnId);
+            if (value == null)
+            {
+                return false;
+            }
+
+            var text = value.ToString();
+            switch ((matchMode ?? "contains").ToLowerInvariant())
+            {
+                case "exact":
+                    return string.Equals(text, keyword, StringComparison.OrdinalIgnoreCase);
+                case "prefix":
+                    return text.StartsWith(keyword, StringComparison.OrdinalIgnoreCase);
+                default:
+                    return text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+        }
+
+        private object GetMappedFieldValue(object obj, string columnId)
+        {
+            if (obj == null || string.IsNullOrWhiteSpace(columnId))
+            {
+                return null;
+            }
+
+            ZHSan.Core.Presentation.UI.TabList.TabListFieldMappingDescriptor mapping = null;
+            if (Session.MainGame != null && Session.MainGame.mainGameScreen != null)
+            {
+                // mapping is attached to current query and passed through descriptor.
+            }
+
+            // Read mapping from current descriptor by matching ColumnId.
+            // Since TabListInFrame does not hold query state, infer from active descriptor invocation:
+            // this method is called during ApplyQueryDescriptor where current query is in scope.
+            // Fallback to legacy explicit behavior when no mapping is found.
+            if (this.currentQueryForMapping != null && this.currentQueryForMapping.FieldMappings != null)
+            {
+                mapping = this.currentQueryForMapping.FieldMappings
+                    .FirstOrDefault(m => string.Equals(m.ColumnId, columnId, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (mapping != null)
+            {
+                if (mapping.UseToString)
+                {
+                    return obj.ToString();
+                }
+
+                if (!string.IsNullOrWhiteSpace(mapping.PropertyName))
+                {
+                    var mappedProperty = obj.GetType().GetProperty(mapping.PropertyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                    if (mappedProperty != null)
+                    {
+                        return mappedProperty.GetValue(obj, null);
+                    }
+                }
+            }
+
+            if (obj is GameObject gameObject)
+            {
+                switch (columnId.ToLowerInvariant())
+                {
+                    case "name":
+                        return gameObject.Name;
+                    case "status":
+                        return gameObject.ToString();
+                }
+            }
+
+            return null;
+        }
+
         [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
         internal struct SubKind
         {
@@ -1047,4 +1246,3 @@ namespace TabListPlugin
         }
     }
 }
-

@@ -12,6 +12,7 @@ using System.IO;
 using System.Reflection;
 using Tools;
 using WorldOfTheThreeKingdoms.GameScreens;
+using ZHSan.Core.Infrastructure.Runtime;
 
 namespace WorldOfTheThreeKingdoms
 {
@@ -81,6 +82,8 @@ namespace WorldOfTheThreeKingdoms
             //第一步
           
             Platform.MainGame = this;
+
+            RuntimeBootstrap.Initialize();
 
             //if (Platform.PlatFormType == PlatFormType.Win || Platform.PlatFormType == PlatFormType.Desktop)
             //{

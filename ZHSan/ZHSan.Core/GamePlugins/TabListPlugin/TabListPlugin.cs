@@ -11,6 +11,7 @@ using System;
 //using System.Drawing;
 using System.Xml;
 using WorldOfTheThreeKingdoms;
+using ZHSan.Core.Presentation.UI.TabList;
 
 namespace TabListPlugin
 {
@@ -98,6 +99,11 @@ namespace TabListPlugin
             node = nextSibling.ChildNodes.Item(11);
             this.tabList.SelectSoundFile = @"Content\Sound\" + node.Attributes.GetNamedItem("Select").Value;
             this.tabList.LoadFromXMLNode(nextSibling.ChildNodes.Item(12));
+        }
+
+        public void ApplyQueryDescriptor(TabListQueryDescriptor query)
+        {
+            this.tabList.ApplyQueryDescriptor(query);
         }
 
         public void RefreshEditable()
