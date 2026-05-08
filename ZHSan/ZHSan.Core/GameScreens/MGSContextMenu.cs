@@ -124,7 +124,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             switch (result)
             {
                 case ContextMenuResult.Architecture_Detail:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Architecture, FrameFunction.Browse, false, true, false, false, this.CurrentArchitecture.GetGameObjectList(), null, "", "");
+                    this.ShowArchitectureDetailTabList(FrameFunction.Browse, false, true, false, false, this.CurrentArchitecture.GetGameObjectList(), null, "");
                     break;
 
                 case ContextMenuResult.Architecture_Persons:
@@ -148,7 +148,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     break;
 
                 case ContextMenuResult.Architecture_Treasure:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Treasure, FrameFunction.Browse, true, true, false, false, this.CurrentArchitecture.GetAllTreasureInArchitecture(), null, "", "");
+                    this.ShowTreasureDetailTabList(FrameFunction.Browse, true, true, false, false, this.CurrentArchitecture.GetAllTreasureInArchitecture(), null, "");
                     break;
                 //case ContextMenuResult.Architecture_xiangxixinxi:
                 //    break;
@@ -193,14 +193,14 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 case ContextMenuResult.Faction_Architectures:
                     if (this.CurrentArchitecture.BelongedFaction != null)
                     {
-                        this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Architecture, FrameFunction.Browse, false, true, false, false, this.CurrentArchitecture.BelongedFaction.Architectures.GetList(), null, "", "");
+                        this.ShowArchitectureDetailTabList(FrameFunction.Browse, false, true, false, false, this.CurrentArchitecture.BelongedFaction.Architectures.GetList(), null, "");
                     }
                     break;
 
                 case ContextMenuResult.Faction_Troops:
                     if (this.CurrentArchitecture.BelongedFaction != null)
                     {
-                        this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Troop, FrameFunction.Browse, false, true, false, false, this.CurrentArchitecture.BelongedFaction.Troops.GetList(), null, "", "");
+                        this.ShowTroopDetailTabList(FrameFunction.Browse, false, true, false, false, this.CurrentArchitecture.BelongedFaction.Troops.GetList(), null, "");
                     }
                     break;
 
@@ -650,7 +650,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     break;
 
                 case ContextMenuResult.Faction_ChangeCapital:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Architecture, FrameFunction.GetNewCapital, false, true, true, false, this.CurrentArchitecture.GetChangeCapitalArchitectureList(), null, "迁都", "");
+                    this.ShowArchitectureDetailTabList(FrameFunction.GetNewCapital, false, true, true, false, this.CurrentArchitecture.GetChangeCapitalArchitectureList(), null, "迁都");
                     break;
                 case ContextMenuResult.Faction_SelectPrince :
                     this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.SelectPrince, false, true, true, false, this.CurrentArchitecture.BelongedFaction.Leader.ChildrenCanBeSelectedAsPrince(), null, "立储", "");
@@ -745,17 +745,17 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 case ContextMenuResult.Faction_Treasure:
                     if (this.CurrentArchitecture.BelongedFaction != null)
                     {
-                        this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Treasure, FrameFunction.Browse, true, true, false, false, this.CurrentArchitecture.GetAllTreasureInFaction(), null, "", "");
+                        this.ShowTreasureDetailTabList(FrameFunction.Browse, true, true, false, false, this.CurrentArchitecture.GetAllTreasureInFaction(), null, "");
                     }
                     break;
                 case ContextMenuResult.Faction_Treasure_Confiscate:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Treasure, FrameFunction.GetConfiscateTreasure, false, true, true, false, this.CurrentArchitecture.BelongedFaction.AllTreasuresExceptLeader, null, "", "");
+                    this.ShowTreasureDetailTabList(FrameFunction.GetConfiscateTreasure, false, true, true, false, this.CurrentArchitecture.BelongedFaction.AllTreasuresExceptLeader, null, "");
                     break;
                 case ContextMenuResult.Faction_Treasure_Award:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Treasure, FrameFunction.GetAwardTreasure, false, true, true, false, this.CurrentArchitecture.GetTreasureListOfLeader(), null, "", "");
+                    this.ShowTreasureDetailTabList(FrameFunction.GetAwardTreasure, false, true, true, false, this.CurrentArchitecture.GetTreasureListOfLeader(), null, "");
                     break;
                 case ContextMenuResult.Faction_Treasure_Sell:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Treasure, FrameFunction.GetSellTreasure, false, true, true, true, this.CurrentArchitecture.GetTreasureListOfLeader(), null, "卖宝", "");
+                    this.ShowTreasureDetailTabList(FrameFunction.GetSellTreasure, false, true, true, true, this.CurrentArchitecture.GetTreasureListOfLeader(), null, "卖宝");
                     break;
                 #endregion
 
@@ -850,12 +850,12 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     break;
 
                 case ContextMenuResult.Jump_Architecture:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Architecture, FrameFunction.Jump, false, true, false, false, Session.Current.Scenario.CurrentPlayer.Architectures, null, "跳转", "");
+                    this.ShowArchitectureDetailTabList(FrameFunction.Jump, false, true, false, false, Session.Current.Scenario.CurrentPlayer.Architectures, null, "跳转");
 
                     break;
 
                 case ContextMenuResult.Jump_Troop:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Troop, FrameFunction.Jump, false, true, false, false, Session.Current.Scenario.CurrentPlayer.Troops, null, "跳转", "");
+                    this.ShowTroopDetailTabList(FrameFunction.Jump, false, true, false, false, Session.Current.Scenario.CurrentPlayer.Troops, null, "跳转");
                     break;
 
                 case ContextMenuResult.Jump_Person:
@@ -947,11 +947,11 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     break;
 
                 case ContextMenuResult.Information_AllArchitectures:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Architecture, FrameFunction.Browse, false, true, false, false, Session.Current.Scenario.Architectures, null, "", "");
+                    this.ShowArchitectureDetailTabList(FrameFunction.Browse, false, true, false, false, Session.Current.Scenario.Architectures, null, "");
                     break;
 
                 case ContextMenuResult.Information_AllTroops:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Troop, FrameFunction.Browse, false, true, false, false, Session.Current.Scenario.Troops, null, "", "");
+                    this.ShowTroopDetailTabList(FrameFunction.Browse, false, true, false, false, Session.Current.Scenario.Troops, null, "");
                     break;
 
                 case ContextMenuResult.Information_AllPersons:
@@ -987,7 +987,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     break;
 
                 case ContextMenuResult.Information_AllTreasures:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Treasure, FrameFunction.Browse, false, true, false, false, Session.Current.Scenario.Treasures, null, "", "");
+                    this.ShowTreasureDetailTabList(FrameFunction.Browse, false, true, false, false, Session.Current.Scenario.Treasures, null, "");
                     break;
 
                 case ContextMenuResult.Information_AllGuanjues:
@@ -1205,7 +1205,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     break;
 
                 case ContextMenuResult.TroopDetail:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Troop, FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetGameObjectList(), null, "", "");
+                    this.ShowTroopDetailTabList(FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetGameObjectList(), null, "");
                     break;
 
                 case ContextMenuResult.TroopPersons:
@@ -1221,19 +1221,19 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     break;
 
                 case ContextMenuResult.TroopTreasure:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Treasure, FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetTreasureList(), null, "", "");
+                    this.ShowTreasureDetailTabList(FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetTreasureList(), null, "");
                     break;
 
                 case ContextMenuResult.TroopInfo_TroopDetail:
                     if (!Session.LargeContextMenu)
                     {
-                        this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Troop, FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetGameObjectList(), null, "", "");
+                        this.ShowTroopDetailTabList(FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetGameObjectList(), null, "");
                     }
                     else
                     {
                         this.ContextMenuRightClick();
                     }
-                    //this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Troop, FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetGameObjectList(), null, "", "");
+                    //this.ShowTroopDetailTabList(FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetGameObjectList(), null, "");
                     break;
 
                 case ContextMenuResult.TroopInfo_TroopPersons:
@@ -1249,7 +1249,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     break;
 
                 case ContextMenuResult.TroopInfo_TroopTreasure:
-                    this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Treasure, FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetTreasureList(), null, "", "");
+                    this.ShowTreasureDetailTabList(FrameFunction.Browse, true, true, false, false, this.CurrentTroop.GetTreasureList(), null, "");
                     break;
 
                 case ContextMenuResult.Plugins:

@@ -1124,9 +1124,11 @@ namespace TabListPlugin
                 this.AddRows();
             }
 
-            this.listKindToDisplay.SelectedTab.ResetTextTextures();
-            this.listKindToDisplay.SelectedTab.ResetAllTextures();
-            this.listKindToDisplay.ReCalculateTabsWidth();
+            if (this.listKindToDisplay.SelectedTab != null)
+            {
+                this.listKindToDisplay.SelectedTab.ResetAllTextures();
+            }
+            this.listKindToDisplay.ReCalculate();
             this.currentQueryForMapping = null;
         }
 

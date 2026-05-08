@@ -53,7 +53,12 @@
   - [x] 已补齐 FrameFunction 级 Profile 覆盖在过滤模式/字段映射分发中的执行链（function override 生效优先于 kind 默认）。
   - [x] 已完成 Person Detail 首批调用路径替换（通过 ShowPersonDetailTabList 统一进入 QueryProfile + Frame 装配流程）。
   - [x] 已抽取 Detail 统一入口骨架（ShowDetailTabListByKind），供 Troop/Architecture/Treasure 迁移复用。
-  - [ ] 下一步：继续推进 C-2 中 Troop/Architecture/Treasure Detail 面板迁移，分批替换旧面板直接调用路径。
+  - [x] 已完成 Troop/Architecture/Treasure Detail 第二批调用路径替换（ContextMenu Browse 入口统一接入 ShowDetailTabListByKind，且保持原 OK/Cancel/CheckBox/多选语义）。
+  - [x] 已修复本轮 DesktopGL 编译阻塞项（TabListInFrame 未实现调用、QueryProfileProvider 列类型推断、RuntimeBootstrap FeatureFlags/命名空间解析、ContextMenuCommandBridge 引用）。
+- [x] 已完成非 ContextMenu 首批 Detail 入口迁移（ScreenManager 运兵目标列表切换到统一 Detail 入口）。
+- [x] 已完成 Detail tabName 兜底规则统一（Person 默认 Personal；Architecture+GetTransferArchitecture 默认 运兵）。
+- [x] 已完成非 ContextMenu 人物 Detail 入口补迁移（ScreenManager 授予宝物选人切换到 ShowPersonDetailTabList 统一入口）。
+- [ ] 下一步：继续推进 C-2 中 TabList 行为收口验收（重点校对 FrameFunction 与 tabName 组合语义），并准备进入 C-3 高风险批次。
 
 ---
 
@@ -145,7 +150,7 @@
 ### C-2 中风险批次
 - [x] `[P0][UI][HC-LC]` 迁移 ContextMenu（命令绑定改为 Command Descriptor，而非直接业务调用）。
 - [ ] `[P1][UI]` 迁移 TabList（统一列定义、排序、筛选、分页状态）。（已完成描述符预备与首条接入）
-- [ ] `[P1][UI]` 迁移 Person/Troop/Architecture/Treasure Detail 面板。
+- [x] `[P1][UI]` 迁移 Person/Troop/Architecture/Treasure Detail 面板。
 
 ### C-3 高风险批次
 - [ ] `[P0][UI][RISK][HC-LC]` 迁移 ToolBar + DateRunner 交互组合。

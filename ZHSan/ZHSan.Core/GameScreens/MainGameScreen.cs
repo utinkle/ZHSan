@@ -2060,11 +2060,11 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
             foreach (var filter in this.currentTabListQuery.Filters)
             {
-                if (filter.ColumnId == "status" && !string.IsNullOrWhiteSpace(filter.Keyword))
+                if (filter.ColumnId == "status" && !string.IsNullOrWhiteSpace(filter.Keyword) && string.IsNullOrWhiteSpace(title))
                 {
                     title = filter.Keyword;
                 }
-                else if (filter.ColumnId == "name" && !string.IsNullOrWhiteSpace(filter.Keyword))
+                else if (filter.ColumnId == "name" && !string.IsNullOrWhiteSpace(filter.Keyword) && string.IsNullOrWhiteSpace(tabName))
                 {
                     tabName = filter.Keyword;
                 }
@@ -2102,6 +2102,43 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             }
         }
 
+
+        private readonly struct DetailTabListOptions
+        {
+            public DetailTabListOptions(bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting)
+            {
+                this.OkEnabled = okEnabled;
+                this.CancelEnabled = cancelEnabled;
+                this.ShowCheckBox = showCheckBox;
+                this.Multiselecting = multiselecting;
+            }
+
+            public bool OkEnabled { get; }
+            public bool CancelEnabled { get; }
+            public bool ShowCheckBox { get; }
+            public bool Multiselecting { get; }
+        }
+
+        private string ResolveDetailTabName(FrameKind kind, FrameFunction function, string tabName)
+        {
+            if (!string.IsNullOrWhiteSpace(tabName))
+            {
+                return tabName;
+            }
+
+            if (kind == FrameKind.Person)
+            {
+                return "Personal";
+            }
+
+            if (kind == FrameKind.Architecture && function == FrameFunction.GetTransferArchitecture)
+            {
+                return "运兵";
+            }
+
+            return string.Empty;
+        }
+
         private void PrepareTabListFrame(FrameKind kind, FrameFunction function, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName)
         {
             this.Plugins.GameFramePlugin.Kind = kind;
@@ -2116,26 +2153,43 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.Plugins.GameFramePlugin.SetFrameContent(this.Plugins.TabListPlugin.TabList, base.viewportSizeFull);
         }
 
-        private void ShowPersonDetailTabList(FrameFunction function, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title)
+        private void ShowDetailTabListByKind(FrameKind kind, FrameFunction function, DetailTabListOptions options, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string defaultTabName)
         {
-            this.ShowDetailTabListByKind(FrameKind.Person, function, gameObjectList, selectedObjectList, title, "Personal");
-        }
-
-        private void ShowDetailTabListByKind(FrameKind kind, FrameFunction function, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string defaultTabName)
-        {
+            var effectiveTabName = this.ResolveDetailTabName(kind, function, defaultTabName);
             this.ShowTabListInFrame(
                UndoneWorkKind.Frame,
                kind,
                function,
-               false,
-               true,
-               true,
-               false,
+               options.OkEnabled,
+               options.CancelEnabled,
+               options.ShowCheckBox,
+               options.Multiselecting,
                gameObjectList,
                selectedObjectList,
                title,
-               defaultTabName);
+               effectiveTabName);
         }
+
+        internal void ShowPersonDetailTabList(FrameFunction function, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Person, function, new DetailTabListOptions(false, true, true, false), gameObjectList, selectedObjectList, title, tabName);
+        }
+
+        internal void ShowTroopDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Troop, function, new DetailTabListOptions(okEnabled, cancelEnabled, showCheckBox, multiselecting), gameObjectList, selectedObjectList, title, tabName);
+        }
+
+        internal void ShowArchitectureDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Architecture, function, new DetailTabListOptions(okEnabled, cancelEnabled, showCheckBox, multiselecting), gameObjectList, selectedObjectList, title, tabName);
+        }
+
+        internal void ShowTreasureDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Treasure, function, new DetailTabListOptions(okEnabled, cancelEnabled, showCheckBox, multiselecting), gameObjectList, selectedObjectList, title, tabName);
+        }
+
 
         public void ShowMapViewSelector(bool multiSelecting, GameObjectList gameObjectList, GameDelegates.VoidFunction function, MapViewSelectorKind mapViewSelectorKind)
         {

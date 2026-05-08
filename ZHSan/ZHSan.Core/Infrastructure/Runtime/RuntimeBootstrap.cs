@@ -2,6 +2,8 @@ using ZHSan.Core.Infrastructure.Configuration;
 using ZHSan.Core.Application.Events;
 using ZHSan.Core.Infrastructure.Composition;
 using ZHSan.Core.Infrastructure.FeatureFlags;
+using ZHSan.Core.Presentation.UI.Commands;
+using FeatureFlagsConfig = ZHSan.Core.Infrastructure.FeatureFlags.FeatureFlags;
 using ZHSan.Core.Presentation.UI;
 using ZHSan.Core.Presentation.UI.Services;
 using ZHSan.Core.Presentation.UI.TabList;
@@ -22,11 +24,11 @@ namespace ZHSan.Core.Infrastructure.Runtime
             if (Services != null) return;
 
             Services = new ServiceRegistry();
-            Services.RegisterSingleton(FeatureFlags.Default());
+            Services.RegisterSingleton(FeatureFlagsConfig.Default());
             Services.RegisterSingleton<IEventBus>(new SimpleEventBus());
             Services.RegisterSingleton(RuntimeOptionsLoader.LoadOrDefault(RuntimeOptionsFilePath, RuntimeLog.Info));
 
-            var featureFlags = Services.Resolve<FeatureFlags>();
+            var featureFlags = Services.Resolve<FeatureFlagsConfig>();
             Services.RegisterSingleton(new MyraUiRuntime(featureFlags));
             Services.RegisterSingleton(UiStyleTokens.Default());
             Services.RegisterSingleton(new UiThemeService(UiStyleTokens.Default()));

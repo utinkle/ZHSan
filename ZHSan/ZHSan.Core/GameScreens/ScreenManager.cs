@@ -161,7 +161,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 Treasure currentGameObject = this.CurrentGameObject as Treasure;
                 if (currentGameObject.BelongedPerson != null)
                 {
-                    Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetAwardTreasurePerson, false, true, true, false, this.CurrentArchitecture.BelongedFaction.PersonsInArchitecturesExceptLeader, null, "", "");
+                    Session.MainGame.mainGameScreen.ShowPersonDetailTabList(FrameFunction.GetAwardTreasurePerson, this.CurrentArchitecture.BelongedFaction.PersonsInArchitecturesExceptLeader, null, "", "");
                 }
             }
         }
@@ -741,7 +741,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
                     //this.CurrentArchitecture.RemoveMilitary(m);
                     this.CurrentMilitaries = this.CurrentGameObjects.GetList();
-                    Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Architecture, FrameFunction.GetTransferArchitecture, false, true, true, false, this.CurrentArchitecture.BelongedFaction .ArchitecturesExcluding(this.CurrentArchitecture), null, "运兵", "运兵");
+                    Session.MainGame.mainGameScreen.ShowArchitectureDetailTabList(FrameFunction.GetTransferArchitecture, false, true, true, false, this.CurrentArchitecture.BelongedFaction.ArchitecturesExcluding(this.CurrentArchitecture), null, "运兵", "运兵");
                     //this.mainGameScreen.PushUndoneWork(new UndoneWorkItem(UndoneWorkKind.Selecting, SelectingUndoneWorkKind.MilitaryTransfer));
 
 
