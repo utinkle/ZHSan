@@ -52,7 +52,7 @@ namespace ZHSan.Core.Presentation.UI.TabList
             var profileOverride = ResolveOverride(kind, function);
             var columns = profileOverride != null && profileOverride.Columns != null && profileOverride.Columns.Count > 0
                 ? profileOverride.Columns
-                : new[]
+                : new List<TabListColumnDescriptor>
                 {
                     new TabListColumnDescriptor { Id = "name", Title = "名称", Width = 220, Visible = true, Numeric = false, SmallToBig = true },
                     new TabListColumnDescriptor { Id = "status", Title = "状态", Width = 120, Visible = true, Numeric = false, SmallToBig = true }
