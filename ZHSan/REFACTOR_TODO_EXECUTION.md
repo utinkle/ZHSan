@@ -5,6 +5,17 @@
 
 ---
 
+## 当前进行中任务（实时进度）
+
+- 当前任务：**Phase A / A-2 依赖装配与事件骨架**
+- 当前进度：
+  - [x] 已完成 `ServiceRegistry` 轻量服务注册器落地。
+  - [x] 已完成 `IEventBus + SimpleEventBus` 事件总线骨架落地。
+  - [x] 已完成 `FeatureFlags` 与 `RuntimeBootstrap` 初始化接入（默认关闭新系统）。
+  - [ ] 下一步继续推进 A-1（分层映射表与跨层依赖规则文档化到代码目录结构）。
+
+---
+
 ## 0. 标注说明（所有 TODO 均使用以下标签）
 
 - `[P0]`：最高优先级，阻塞后续核心开发。
@@ -40,15 +51,15 @@
 - [ ] `[P0][ARCH][HC-LC][NO-TEST]` 建立命名空间分层：`Domain / Application / Presentation / Rendering / Infrastructure`。
 - [ ] `[P0][ARCH][HC-LC]` 明确跨层依赖规则：仅允许上层依赖下层抽象，不反向引用具体实现。
 - [ ] `[P1][ARCH]` 输出“旧类 -> 新归属层”映射表（MainGame/ScreenManager/GamePlugin/AnimatedTexture 等）。
-- [ ] `[P0][RISK][ARCH]` 设计并接入 Feature Flag（支持新旧系统切换）。
+- [x] `[P0][RISK][ARCH]` 设计并接入 Feature Flag（支持新旧系统切换）。
 
 `[DONE-CRITERIA]`
 - 新目录/命名空间结构可编译。
 - 至少完成 1 个核心路径（启动 -> 主界面）的分层调用链。
 
 ### A-2 依赖装配与事件骨架
-- [ ] `[P0][ARCH][HC-LC][NO-TEST]` 引入轻量依赖注入容器（或自建 ServiceRegistry），移除“到处 new”。
-- [ ] `[P1][ARCH][HC-LC]` 增加 EventBus 骨架（DomainEvent / UiEvent 两类）。
+- [x] `[P0][ARCH][HC-LC][NO-TEST]` 引入轻量依赖注入容器（或自建 ServiceRegistry），移除“到处 new”。
+- [x] `[P1][ARCH][HC-LC]` 增加 EventBus 骨架（DomainEvent / UiEvent 两类）。
 - [ ] `[P1][INFRA]` 增加统一配置入口（图形、UI、特效、输入、调试开关）。
 
 `[DONE-CRITERIA]`
