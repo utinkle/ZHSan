@@ -11,13 +11,17 @@ namespace ZHSan.Core.Infrastructure.FeatureFlags
         // Camera/effects migration
         public bool UseNewCameraSystem { get; set; }
 
+        // ToolBar + DateRunner migration
+        public bool UseToolBarDateRunnerPolicy { get; set; }
+
         public static FeatureFlags Default()
         {
             return new FeatureFlags
             {
                 UseMyraUiRuntime = false,
                 UseNewAnimationSystem = false,
-                UseNewCameraSystem = false
+                UseNewCameraSystem = false,
+                UseToolBarDateRunnerPolicy = false
             };
         }
     }

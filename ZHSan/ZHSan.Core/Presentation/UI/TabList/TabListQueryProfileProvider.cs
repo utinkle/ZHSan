@@ -78,7 +78,7 @@ namespace ZHSan.Core.Presentation.UI.TabList
                 descriptorService.AddFilter(query, "status", title, ResolveStatusFilterMode(kind, function));
             }
 
-            if (!string.IsNullOrWhiteSpace(tabName))
+            if (ShouldApplyTabNameAsFilter(function, tabName))
             {
                 descriptorService.AddFilter(query, "name", tabName, ResolveNameFilterMode(kind, function));
             }
@@ -115,6 +115,16 @@ namespace ZHSan.Core.Presentation.UI.TabList
             }
         }
 
+
+
+        private static bool ShouldApplyTabNameAsFilter(FrameFunction? function, string tabName)
+        {
+            if (string.IsNullOrWhiteSpace(tabName)) return false;
+
+            // tabName 在大部分 FrameFunction 中表达“UI 页签语义”，而非“名称关键字过滤”。
+            // 仅在 Browse 场景下按关键字过滤，以避免 Personal/运兵/Ability 等页签词误伤数据集。
+            return function.HasValue && function.Value == FrameFunction.Browse;
+        }
         private string ResolveStatusFilterMode(FrameKind kind, FrameFunction? function)
         {
             var profileOverride = ResolveOverride(kind, function);

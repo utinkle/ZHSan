@@ -48,6 +48,12 @@ namespace ZHSan.Core.Infrastructure.Configuration
                 options.Ui.TabListProfiles = new TabListProfileOptions();
             }
 
+            if (options.Ui.ToolBarDateRunnerPolicy == null)
+            {
+                log?.Invoke("[RuntimeOptionsLoader] ToolBarDateRunnerPolicy is null. Fallback to defaults.");
+                options.Ui.ToolBarDateRunnerPolicy = new ToolBarDateRunnerPolicyOptions();
+            }
+
             if (options.Ui.TabListProfiles.Overrides == null)
             {
                 options.Ui.TabListProfiles.Overrides = new System.Collections.Generic.List<TabListProfileOverrideOption>();

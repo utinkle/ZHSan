@@ -30,6 +30,17 @@ namespace ZHSan.Core.Infrastructure.Configuration
         public float UiScale { get; set; } = 1f;
 
         public TabListProfileOptions TabListProfiles { get; set; } = new TabListProfileOptions();
+
+        public ToolBarDateRunnerPolicyOptions ToolBarDateRunnerPolicy { get; set; } = new ToolBarDateRunnerPolicyOptions();
+    }
+
+    public sealed class ToolBarDateRunnerPolicyOptions
+    {
+        public bool LockInNoneFlow { get; set; } = true;
+        public bool LockInMapViewSelector { get; set; } = true;
+        public bool LockInSelector { get; set; } = true;
+        public bool LockInDialog { get; set; } = true;
+        public bool SuspendOnOptionDialog { get; set; } = true;
     }
 
     public sealed class TabListProfileOptions

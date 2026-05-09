@@ -23,6 +23,8 @@ using Platforms;
 using GameManager;
 using ZHSan.Core.Infrastructure.Runtime;
 using ZHSan.Core.Infrastructure.FeatureFlags;
+using ZHSan.Core.Infrastructure.Configuration;
+using ZHSan.Core.Infrastructure.Logging;
 using ZHSan.Core.Presentation.UI.Adapters;
 using ZHSan.Core.Presentation.UI.ViewModels;
 using ZHSan.Core.Presentation.UI.Services;
@@ -96,7 +98,16 @@ namespace WorldOfTheThreeKingdoms.GameScreens
         private UiContextMenuService uiContextMenuService;
         private TabListDescriptorService tabListDescriptorService;
         private TabListQueryProfileProvider tabListQueryProfileProvider;
+        private ToolBarDateRunnerInteractionService toolBarDateRunnerInteractionService;
+        private RuntimeOptions runtimeOptions;
+        private ToolBarDateRunnerPolicyInputBuilder toolBarDateRunnerPolicyInputBuilder;
+        private ToolBarDateRunnerFlowPolicyBuilder toolBarDateRunnerFlowPolicyBuilder;
+        private ToolBarDateRunnerPolicyCoordinator toolBarDateRunnerPolicyCoordinator;
         private TabListQueryDescriptor currentTabListQuery;
+        private UndoneWorkKind? lastPolicyUndoneWorkKind;
+        private bool? lastPolicyDialogShowing;
+        private bool? lastPolicyContextMenuShowing;
+        private bool? lastPolicyOptionDialogShowing;
 
         public MainGameScreen()
             : base()
@@ -138,6 +149,11 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.uiContextMenuService = RuntimeBootstrap.Services?.Resolve<UiContextMenuService>();
             this.tabListDescriptorService = RuntimeBootstrap.Services?.Resolve<TabListDescriptorService>();
             this.tabListQueryProfileProvider = RuntimeBootstrap.Services?.Resolve<TabListQueryProfileProvider>();
+            this.toolBarDateRunnerInteractionService = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerInteractionService>();
+            this.runtimeOptions = RuntimeBootstrap.Services?.Resolve<RuntimeOptions>();
+            this.toolBarDateRunnerPolicyInputBuilder = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerPolicyInputBuilder>();
+            this.toolBarDateRunnerFlowPolicyBuilder = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerFlowPolicyBuilder>();
+            this.toolBarDateRunnerPolicyCoordinator = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerPolicyCoordinator>();
             this.myraUiRuntime?.Initialize();
             
             //Session.Current.Scenario = new GameScenario(this);
@@ -663,8 +679,8 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                         }
                         if (!Session.Current.Scenario.Factions.HasFactionInQueue(Session.Current.Scenario.PlayerFactions))
                         {
-                            this.Plugins.DateRunnerPlugin.Reset();
-                            this.Plugins.DateRunnerPlugin.RunDays(1);
+                            this.ResetDateRunner();
+                            this.RunDateRunnerDays(1);
                         }
                     }
                     if (Session.Current.Scenario.PlayerFactions.Count == 0)
@@ -2172,7 +2188,12 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         internal void ShowPersonDetailTabList(FrameFunction function, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
         {
-            this.ShowDetailTabListByKind(FrameKind.Person, function, new DetailTabListOptions(false, true, true, false), gameObjectList, selectedObjectList, title, tabName);
+            this.ShowPersonDetailTabList(function, false, true, true, false, gameObjectList, selectedObjectList, title, tabName);
+        }
+
+        internal void ShowPersonDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Person, function, new DetailTabListOptions(okEnabled, cancelEnabled, showCheckBox, multiselecting), gameObjectList, selectedObjectList, title, tabName);
         }
 
         internal void ShowTroopDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
@@ -2883,7 +2904,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
         {
             if ((this.viewMove == ViewMove.Stop) && !this.AfterDayPassed(gameTime))
             {
-                this.Plugins.DateRunnerPlugin.DateGo();
+                this.StartDateRunner();
                 if (!this.AfterDayStarting(gameTime))
                 {
                     if (Session.GlobalVariables.EnableResposiveThreading)
@@ -2892,10 +2913,50 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     }
                     else
                     {
-                        this.Plugins.DateRunnerPlugin.DateStop();
+                        this.StopDateRunner();
                     }
                 }
             }
+        }
+
+        private void StopDateRunner()
+        {
+            // C-3 批次 4：DateRunner 停止触发链路统一收口，避免分散调用。
+            this.Plugins.DateRunnerPlugin?.DateStop();
+        }
+
+        private bool CanAdvanceDateRunner()
+        {
+            if (this.featureFlags == null || !this.featureFlags.UseToolBarDateRunnerPolicy) return true;
+            var policy = this.ApplyToolBarDateRunnerPolicyBridge();
+            return policy.Decision.AllowDateRunnerProgress;
+        }
+
+        private void StartDateRunner()
+        {
+            if (!this.CanAdvanceDateRunner())
+            {
+                this.StopDateRunner();
+                return;
+            }
+
+            this.Plugins.DateRunnerPlugin?.DateGo();
+        }
+
+        private void ResetDateRunner()
+        {
+            this.Plugins.DateRunnerPlugin?.Reset();
+        }
+
+        private void RunDateRunnerDays(int days)
+        {
+            if (!this.CanAdvanceDateRunner())
+            {
+                this.StopDateRunner();
+                return;
+            }
+
+            this.Plugins.DateRunnerPlugin?.RunDays(days);
         }
 
         private void RunAI()
@@ -3003,18 +3064,39 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.CalculateFrameRate(gameTime);
                 this.Plugins.PersonBubblePlugin.Update(gameTime);
 
-                switch (base.UndoneWorks.Peek().Kind)
+                var currentUndoneWorkKind = base.UndoneWorks.Peek().Kind;
+                var hasUndoneWorkChanged = !this.lastPolicyUndoneWorkKind.HasValue || this.lastPolicyUndoneWorkKind.Value != currentUndoneWorkKind;
+                var hasPolicyUiStateChanged = this.HasPolicyRelevantUiStateChanged();
+                if (hasUndoneWorkChanged || hasPolicyUiStateChanged)
+                {
+                    var reason = hasUndoneWorkChanged ? "UndoneWorkKind changed" : "Policy-related UI visibility changed";
+                    if (hasUndoneWorkChanged && hasPolicyUiStateChanged)
+                    {
+                        reason = "UndoneWorkKind + Policy-related UI visibility changed";
+                    }
+
+                    this.TryLogToolBarPolicyCacheDiagnostics(reason);
+                    this.toolBarDateRunnerPolicyCoordinator?.InvalidateCache();
+                    this.lastPolicyUndoneWorkKind = currentUndoneWorkKind;
+                }
+
+                var updateFlowPolicy = this.ApplyToolBarDateRunnerPolicyBridge();
+                switch (currentUndoneWorkKind)
                 {
                     case UndoneWorkKind.None:
 
-                        this.UpdateToolBar(gameTime);
+                        var toolBarPolicy = updateFlowPolicy;
+                        if (!toolBarPolicy.Decision.ShouldLockInputForFlow(ToolBarLockFlow.None, toolBarPolicy.FlowPolicy))
+                        {
+                            this.UpdateToolBar(gameTime);
+                            this.UpdateViewMove();
+                            this.HandleKey(gameTime);
+                        }
                         this.UpdateScreenBlind(gameTime);
                         //this.Plugins.youcelanPlugin.Update(gameTime);
                         //this.Plugins.youcelanPlugin.IsShowing = false;
-                        this.UpdateViewMove();
                         this.HandleLaterMouseEvent(gameTime);
                         this.ScrollTheMainMap(gameTime);
-                        this.HandleKey(gameTime);
 
                         if (Session.GlobalVariables.EnableResposiveThreading)
                         {
@@ -3031,7 +3113,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                                 if (roundDone)
                                 {
                                     roundDone = false;
-                                    this.Plugins.DateRunnerPlugin.DateStop();
+                                    this.StopDateRunner();
                                 }
                             }
                         }
@@ -3052,7 +3134,11 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                         break;
 
                     case UndoneWorkKind.Dialog:
-                        this.UpdateDialog(gameTime);
+                        var dialogPolicy = updateFlowPolicy;
+                        if (!dialogPolicy.Decision.ShouldLockInputForFlow(ToolBarLockFlow.Dialog, dialogPolicy.FlowPolicy))
+                        {
+                            this.UpdateDialog(gameTime);
+                        }
 
                         break;
                     case UndoneWorkKind.tupianwenzi:
@@ -3082,13 +3168,21 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                         break;
 
                     case UndoneWorkKind.Selector:
-                        this.HandleLaterMouseEvent(gameTime);
+                        var selectorPolicy = updateFlowPolicy;
+                        if (!selectorPolicy.Decision.ShouldLockInputForFlow(ToolBarLockFlow.Selector, selectorPolicy.FlowPolicy))
+                        {
+                            this.HandleLaterMouseEvent(gameTime);
+                        }
                         this.ScrollTheMainMap(gameTime);
                         break;
 
                     case UndoneWorkKind.MapViewSelector:
                         this.ResetCurrentStatus();
-                        this.UpdateViewMove();
+                        var mapSelectorPolicy = updateFlowPolicy;
+                        if (!mapSelectorPolicy.Decision.ShouldLockInputForFlow(ToolBarLockFlow.MapViewSelector, mapSelectorPolicy.FlowPolicy))
+                        {
+                            this.UpdateViewMove();
+                        }
                         this.HandleLaterMouseScroll();
                         this.ScrollTheMainMap(gameTime);
                         if (base.EnableLaterMouseEvent)
@@ -3317,6 +3411,53 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     this.Plugins.TroopSurveyPlugin.Showing = false;
                 }
             }
+        }
+
+
+        private bool HasPolicyRelevantUiStateChanged()
+        {
+            var dialogShowing = this.Plugins.HelpPlugin != null && this.Plugins.HelpPlugin.IsShowing;
+            var contextMenuShowing = this.Plugins.ContextMenuPlugin != null && this.Plugins.ContextMenuPlugin.IsShowing;
+            var optionDialog = this.Plugins.OptionDialogPlugin as OptionDialogPlugin.OptionDialogPlugin;
+            var optionShowing = optionDialog != null && optionDialog.IsShowing;
+
+            var changed = !this.lastPolicyDialogShowing.HasValue
+                || this.lastPolicyDialogShowing.Value != dialogShowing
+                || !this.lastPolicyContextMenuShowing.HasValue
+                || this.lastPolicyContextMenuShowing.Value != contextMenuShowing
+                || !this.lastPolicyOptionDialogShowing.HasValue
+                || this.lastPolicyOptionDialogShowing.Value != optionShowing;
+
+            this.lastPolicyDialogShowing = dialogShowing;
+            this.lastPolicyContextMenuShowing = contextMenuShowing;
+            this.lastPolicyOptionDialogShowing = optionShowing;
+            return changed;
+        }
+
+        private void TryLogToolBarPolicyCacheDiagnostics(string reason)
+        {
+            if (this.featureFlags == null || !this.featureFlags.UseToolBarDateRunnerPolicy || this.toolBarDateRunnerPolicyCoordinator == null)
+            {
+                return;
+            }
+
+            RuntimeLog.Info(this.toolBarDateRunnerPolicyCoordinator.BuildCacheDiagnostics(reason));
+        }
+
+        private ToolBarDateRunnerPolicySnapshot ApplyToolBarDateRunnerPolicyBridge()
+        {
+            if (this.toolBarDateRunnerPolicyCoordinator == null)
+            {
+                return default;
+            }
+
+            var snapshot = this.toolBarDateRunnerPolicyCoordinator.Evaluate(this, this.runtimeOptions, this.featureFlags);
+            if (snapshot.Decision.SuspendDateRunner)
+            {
+                this.StopDateRunner();
+            }
+
+            return snapshot;
         }
 
         private void UpdateToolBar(GameTime gameTime)
