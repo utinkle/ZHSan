@@ -58,7 +58,42 @@
 - [x] 已完成非 ContextMenu 首批 Detail 入口迁移（ScreenManager 运兵目标列表切换到统一 Detail 入口）。
 - [x] 已完成 Detail tabName 兜底规则统一（Person 默认 Personal；Architecture+GetTransferArchitecture 默认 运兵）。
 - [x] 已完成非 ContextMenu 人物 Detail 入口补迁移（ScreenManager 授予宝物选人切换到 ShowPersonDetailTabList 统一入口）。
-- [ ] 下一步：继续推进 C-2 中 TabList 行为收口验收（重点校对 FrameFunction 与 tabName 组合语义），并准备进入 C-3 高风险批次。
+- [x] 已完成 C-2 行为收口第一轮：校对 FrameFunction 与 tabName 组合语义，修正 tabName 仅在 Browse 场景参与名称过滤（避免 Personal/运兵/Ability 误过滤）。
+- [x] 已完成 C-2 行为收口第二轮首批迁移：ScreenManager 外交人员/婚配选择 Person 列表入口切换到 ShowPersonDetailTabList 统一 Detail/Profile 路径（保留原 OK/Cancel/CheckBox/多选配置）。
+- [x] 已完成 C-2 行为收口第二轮第二批迁移：MGSContextMenu 中 Person 类型 ShowTabListInFrame 入口切换到 ShowPersonDetailTabList 统一 Detail/Profile 路径。
+- [x] 已完成 MGSContextMenu 非 Person Detail 入口核对（Troop/Architecture/Treasure 已统一走 Detail 入口，未发现新增直调分散点）。
+- [x] 已完成 C-3 前置准备：落地 ToolBarDateRunnerInteractionService 并接入 RuntimeBootstrap 注册，集中承载 ToolBar/DateRunner 交互策略。
+- [x] 已完成 C-3 第一批桥接：新增 FeatureFlag(UseToolBarDateRunnerPolicy) 并在 MainGameScreen 接入 ToolBarDateRunnerInteractionService 桥接逻辑（可开关控制，默认关闭）。
+- [x] 已完成 C-3 第二批首轮：将 ToolBar/DateRunner 判定聚合为 PolicyDecision（SuspendDateRunner/LockToolBarInput），并在 MainGameScreen None 流程下按策略统一驱动 ToolBar/视野移动/按键更新开关。
+- [x] 已完成 C-3 第二批次轮：将 OptionDialog 场景纳入 ToolBar/DateRunner 策略判定输入，补齐关键弹窗场景停摆规则。
+- [x] 已完成 C-3 场景级回归核对清单（首版）：
+  - [x] None 主流程：ContextMenu / Confirmation / Help / Option 弹窗下 DateRunner 停止策略核对。
+  - [x] MapViewSelector 流程：LockToolBarInput 为 true 时跳过 UpdateViewMove。
+  - [x] FrameOverlay 流程：GameFrame 显示时 ToolBar 输入锁定策略核对。
+- [x] 已开始 ToolBar + DateRunner 组合行为迁移（旧逻辑替换批次 1）：MapViewSelector 分支接入策略决策。
+- [x] 已完成旧逻辑替换批次 2：Selector 分支接入 ToolBar 锁定协同策略。
+- [x] 已完成策略参数可配置化首版：RuntimeOptions.Ui.ToolBarDateRunnerPolicy（LockInNoneFlow/LockInMapViewSelector/LockInSelector/SuspendOnOptionDialog）。
+- [x] 已完成旧逻辑替换批次 3：Dialog 分支接入 ToolBar 锁定协同策略。
+- [x] 已扩展策略配置参数：新增 LockInDialog，并完成默认值接入。
+- [x] 已完成 RuntimeOptions 示例与配置加载校验日志（ToolBarDateRunnerPolicy 参数）。
+- [x] 已完成 C-3 旧逻辑替换批次 4：DateRunner 停止触发链路统一收口（MainGameScreen StopDateRunner helper 接管分散 DateStop 调用）。
+- [x] 已完成 C-3 第三批次轮首轮：DateRunner 启停触发点继续收口（DateGo/Reset/RunDays 统一经 MainGameScreen helper）。
+- [x] 已完成 DateRunner 启停策略首轮下沉：在 StartDateRunner/RunDateRunnerDays 接入统一进度许可判定（现已并入 ToolBarDateRunnerPolicyDecision）。
+- [x] 已完成分支行为对齐清单首版（None/Selector/MapViewSelector/Dialog + DateRunner 进度触发一致性）。
+- [x] 已完成 C-3 策略对象收口首轮：将 DateRunner 进度许可并入 ToolBarDateRunnerPolicyDecision（AllowDateRunnerProgress），减少额外评估器分层。
+- [x] 已完成 C-3 策略职责收敛第一轮：抽取 IsPolicyLockEnabledForFlow，统一 None/Selector/MapViewSelector/Dialog 分支锁定开关读取逻辑。
+- [x] 已完成 C-3 输入构造收敛首轮：抽取 BuildToolBarDateRunnerPolicyInput + ToolBarDateRunnerPolicyInput，统一 UI 状态采集输入。
+- [x] 已完成输入构造下沉首版：新增 ToolBarDateRunnerPolicyInputBuilder，并在 MainGameScreen 通过 DI 复用。
+- [x] 已完成分支分发下沉首轮：Flow 锁定判定迁移到 ToolBarDateRunnerPolicyDecision.ShouldLockInputForFlow。
+- [x] 已完成 FlowPolicy 构造职责拆分首版：新增 ToolBarDateRunnerFlowPolicyBuilder 并通过 DI 接入 MainGameScreen。
+- [x] 已完成 ApplyToolBarDateRunnerPolicyBridge 下沉首版：新增 ToolBarDateRunnerPolicyCoordinator，统一串联 InputBuilder + FlowPolicyBuilder + InteractionService。
+- [x] 已完成 MainGameScreen 策略桥接调用收敛首轮：Update 主循环内统一评估一次 snapshot，并在 None/Dialog/Selector/MapViewSelector 分支复用。
+- [x] 已完成策略重算收敛首轮：ToolBarDateRunnerPolicyCoordinator 增加输入+FlowPolicy 缓存，相同状态下复用 snapshot（等价于按状态变化触发重算）。
+- [x] 已完成缓存失效事件显式化首轮：在 MainGameScreen 按 UndoneWorkKind 变化触发 coordinator.InvalidateCache。
+- [x] 已完成可观测性首轮：协调器增加 CacheHitCount/CacheMissCount 计数器。
+- [x] 已完成更细粒度 UI 事件失效触发首轮：按 Help/ContextMenu/OptionDialog 显隐变化触发 coordinator 缓存失效。
+- [x] 已完成失效触发与诊断日志联动首轮：缓存失效前输出 PolicyCoordinator 命中/失效统计（HitRate/MissRate）。
+- [ ] 下一步：推进 C-3 后续批次，补充诊断日志采样/节流策略（避免高频帧循环日志噪音）。
 
 ---
 

@@ -35,6 +35,13 @@ namespace ZHSan.Core.Infrastructure.Runtime
             Services.RegisterSingleton(new UiNavigationService());
             Services.RegisterSingleton(new UiDialogService(featureFlags));
             Services.RegisterSingleton(new UiContextMenuService(new ContextMenuCommandBridge()));
+            Services.RegisterSingleton(new ToolBarDateRunnerInteractionService(Services.Resolve<RuntimeOptions>()?.Ui?.ToolBarDateRunnerPolicy?.SuspendOnOptionDialog ?? true));
+            Services.RegisterSingleton(new ToolBarDateRunnerPolicyInputBuilder());
+            Services.RegisterSingleton(new ToolBarDateRunnerFlowPolicyBuilder());
+            Services.RegisterSingleton(new ToolBarDateRunnerPolicyCoordinator(
+                Services.Resolve<ToolBarDateRunnerInteractionService>(),
+                Services.Resolve<ToolBarDateRunnerPolicyInputBuilder>(),
+                Services.Resolve<ToolBarDateRunnerFlowPolicyBuilder>()));
             Services.RegisterSingleton(new TabListDescriptorService());
             var tabListProfileProvider = new TabListQueryProfileProvider();
             ApplyTabListProfileOverrides(tabListProfileProvider, Services.Resolve<RuntimeOptions>());
