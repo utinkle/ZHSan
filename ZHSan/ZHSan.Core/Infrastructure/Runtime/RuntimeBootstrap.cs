@@ -27,6 +27,7 @@ namespace ZHSan.Core.Infrastructure.Runtime
             Services.RegisterSingleton(FeatureFlagsConfig.Default());
             Services.RegisterSingleton<IEventBus>(new SimpleEventBus());
             Services.RegisterSingleton(RuntimeOptionsLoader.LoadOrDefault(RuntimeOptionsFilePath, RuntimeLog.Info));
+            Services.RegisterSingleton(new RuntimeOptionsPersistenceService(Services.Resolve<IEventBus>()));
 
             var featureFlags = Services.Resolve<FeatureFlagsConfig>();
             Services.RegisterSingleton(new MyraUiRuntime(featureFlags));
@@ -42,6 +43,13 @@ namespace ZHSan.Core.Infrastructure.Runtime
                 Services.Resolve<ToolBarDateRunnerInteractionService>(),
                 Services.Resolve<ToolBarDateRunnerPolicyInputBuilder>(),
                 Services.Resolve<ToolBarDateRunnerFlowPolicyBuilder>()));
+            Services.RegisterSingleton(new ToolBarDateRunnerPolicyDebugOverlay(
+                Services.Resolve<IEventBus>(),
+                Services.Resolve<RuntimeOptions>()));
+            Services.RegisterSingleton(new RuntimeOptionsReloadDiagnosticsSubscriber(Services.Resolve<IEventBus>()));
+            Services.RegisterSingleton(new RuntimeOptionsPersistenceAlertService(
+                Services.Resolve<IEventBus>(),
+                Services.Resolve<RuntimeOptions>()));
             Services.RegisterSingleton(new TabListDescriptorService());
             var tabListProfileProvider = new TabListQueryProfileProvider();
             ApplyTabListProfileOverrides(tabListProfileProvider, Services.Resolve<RuntimeOptions>());

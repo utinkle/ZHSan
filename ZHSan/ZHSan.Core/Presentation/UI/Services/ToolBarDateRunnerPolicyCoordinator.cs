@@ -14,6 +14,10 @@ namespace ZHSan.Core.Presentation.UI.Services
         private ToolBarDateRunnerPolicyInput lastInput;
         private ToolBarDateRunnerFlowPolicy lastFlowPolicy;
         private ToolBarDateRunnerPolicySnapshot lastSnapshot;
+        private bool hasLoggedTransitionSnapshot;
+        private ToolBarDateRunnerPolicySnapshot lastTransitionSnapshot;
+        private int invalidationCount;
+        private DateTime lastDiagnosticsLoggedAtUtc = DateTime.MinValue;
         public int CacheHitCount { get; private set; }
         public int CacheMissCount { get; private set; }
 
@@ -52,7 +56,37 @@ namespace ZHSan.Core.Presentation.UI.Services
 
         public void InvalidateCache()
         {
+            this.invalidationCount++;
             this.hasCache = false;
+        }
+
+        public bool ShouldLogCacheDiagnostics(RuntimeOptions options)
+        {
+            var policyOptions = options?.Ui?.ToolBarDateRunnerPolicy;
+            if (policyOptions == null || !policyOptions.EnableCacheDiagnosticsLog)
+            {
+                return false;
+            }
+
+            if (policyOptions.CacheDiagnosticsLogSampleEveryInvalidations > 1
+                && this.invalidationCount % policyOptions.CacheDiagnosticsLogSampleEveryInvalidations != 0)
+            {
+                return false;
+            }
+
+            if (policyOptions.CacheDiagnosticsLogMinIntervalMs > 0)
+            {
+                var nowUtc = DateTime.UtcNow;
+                var elapsedMs = (nowUtc - this.lastDiagnosticsLoggedAtUtc).TotalMilliseconds;
+                if (elapsedMs < policyOptions.CacheDiagnosticsLogMinIntervalMs)
+                {
+                    return false;
+                }
+
+                this.lastDiagnosticsLoggedAtUtc = nowUtc;
+            }
+
+            return true;
         }
 
         public string BuildCacheDiagnostics(string reason)
@@ -72,6 +106,45 @@ namespace ZHSan.Core.Presentation.UI.Services
                 this.CacheMissCount,
                 hitRate,
                 missRate);
+        }
+
+        public string TryBuildTransitionDiagnostics(ToolBarDateRunnerPolicySnapshot currentSnapshot, RuntimeOptions options, string reason)
+        {
+            if (options?.Ui?.ToolBarDateRunnerPolicy == null
+                || !options.Ui.ToolBarDateRunnerPolicy.EnablePolicyTransitionDebugLog)
+            {
+                return null;
+            }
+
+            if (!this.hasLoggedTransitionSnapshot)
+            {
+                this.lastTransitionSnapshot = currentSnapshot;
+                this.hasLoggedTransitionSnapshot = true;
+                return string.Format("[ToolBarDateRunnerPolicy][Transition] Initial snapshot observed ({0}).", reason ?? "unspecified");
+            }
+
+            if (this.lastTransitionSnapshot.Equals(currentSnapshot))
+            {
+                return null;
+            }
+
+            var previous = this.lastTransitionSnapshot;
+            this.lastTransitionSnapshot = currentSnapshot;
+            return string.Format(
+                "[ToolBarDateRunnerPolicy][Transition] {0}: SuspendDateRunner {1} -> {2}, LockToolBarInput {3} -> {4}, FlowPolicy(None/Selector/Map/Dialog) {5}/{6}/{7}/{8} -> {9}/{10}/{11}/{12}.",
+                reason ?? "state changed",
+                previous.Decision.SuspendDateRunner,
+                currentSnapshot.Decision.SuspendDateRunner,
+                previous.Decision.LockToolBarInput,
+                currentSnapshot.Decision.LockToolBarInput,
+                previous.FlowPolicy.LockInNoneFlow,
+                previous.FlowPolicy.LockInSelector,
+                previous.FlowPolicy.LockInMapViewSelector,
+                previous.FlowPolicy.LockInDialog,
+                currentSnapshot.FlowPolicy.LockInNoneFlow,
+                currentSnapshot.FlowPolicy.LockInSelector,
+                currentSnapshot.FlowPolicy.LockInMapViewSelector,
+                currentSnapshot.FlowPolicy.LockInDialog);
         }
     }
 
