@@ -1,5 +1,6 @@
 using ZHSan.Core.Infrastructure.Configuration;
 using ZHSan.Core.Presentation.UI.Services;
+using ZHSan.Core.Presentation.UI.Events;
 using ZHSan.Core.Presentation.UI.ViewModels;
 using System.Collections.Generic;
 using System.Linq;
@@ -121,6 +122,12 @@ namespace ZHSan.Core.Presentation.UI.Adapters
             }
             if (this.showMiscGroup)
             {
+                if (this.viewModel.PersistenceAlertLines != null && this.viewModel.PersistenceAlertLines.Count > 0)
+                {
+                    this.widgetLines.Add("== PersistenceAlert ==");
+                    this.widgetLines.AddRange(this.viewModel.PersistenceAlertLines.Select(message => "• " + message));
+                }
+
                 this.widgetLines.Add("== Misc ==");
                 this.widgetLines.AddRange(miscLines.Select(message => "• " + message));
             }
@@ -160,7 +167,47 @@ namespace ZHSan.Core.Presentation.UI.Adapters
             if (skip < 0) skip = 0;
             if (skip > all.Count) skip = all.Count;
             this.viewModel.Messages = all.Skip(skip).Take(maxVisible).ToList();
+            this.viewModel.PersistenceAlertSnapshot = this.overlay?.LatestPersistenceAlertSnapshot;
+            this.viewModel.PersistenceAlertLines = this.BuildPersistenceAlertLines(this.viewModel.PersistenceAlertSnapshot);
             this.widgetDirty = true;
+        }
+
+        private List<string> BuildPersistenceAlertLines(RuntimeOptionsPersistenceAlertSnapshot snapshot)
+        {
+            var lines = new List<string>();
+            if (snapshot == null)
+            {
+                return lines;
+            }
+
+            lines.Add(string.Format(
+                "Level={0}, Trigger={1}, Consecutive={2}/{3}, QuietWindowMs={4}",
+                snapshot.Level,
+                snapshot.Trigger,
+                snapshot.ConsecutiveFailureCount,
+                snapshot.Threshold,
+                snapshot.QuietWindowMs));
+            lines.Add(string.Format(
+                "ThresholdHits={0}, EmittedAlerts={1}, QuietSuppressed={2}",
+                snapshot.ThresholdHitCount,
+                snapshot.EmittedAlertCount,
+                snapshot.QuietWindowSuppressedCount));
+            if (snapshot.Attempt > 0 || snapshot.MaxAttempts > 0)
+            {
+                lines.Add(string.Format(
+                    "Attempt={0}/{1}, Path={2}, Error={3}",
+                    snapshot.Attempt,
+                    snapshot.MaxAttempts,
+                    snapshot.Path,
+                    snapshot.ErrorType));
+            }
+
+            if (!string.IsNullOrWhiteSpace(snapshot.Message))
+            {
+                lines.Add(snapshot.Message);
+            }
+
+            return lines;
         }
 
         private static ToolBarDateRunnerPolicyDebugOverlayViewModel BuildDefaultViewModel(UiStyleTokens styleTokens)

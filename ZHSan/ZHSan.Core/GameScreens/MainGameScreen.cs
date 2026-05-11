@@ -38,7 +38,7 @@ using ZHSan.Core.Presentation.UI;
 
 namespace WorldOfTheThreeKingdoms.GameScreens
 {
-    public partial class MainGameScreen : Screen
+    public partial class MainGameScreen : Screen, IRuntimeOptionsReloadHandler
     {
         private string bianduiLiebiaoBiaoji;
         private ArchitectureLayer architectureLayer;
@@ -108,6 +108,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
         private ToolBarDateRunnerPolicyCoordinator toolBarDateRunnerPolicyCoordinator;
         private IEventBus eventBus;
         private RuntimeOptionsPersistenceService runtimeOptionsPersistenceService;
+        private RuntimeOptionsReloadCoordinator runtimeOptionsReloadCoordinator;
         private ToolBarDateRunnerPolicyDebugOverlayAdapter toolBarDateRunnerPolicyDebugOverlayAdapter;
         private TabListQueryDescriptor currentTabListQuery;
         private UndoneWorkKind? lastPolicyUndoneWorkKind;
@@ -175,6 +176,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.toolBarDateRunnerPolicyCoordinator = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerPolicyCoordinator>();
             this.eventBus = RuntimeBootstrap.Services?.Resolve<IEventBus>();
             this.runtimeOptionsPersistenceService = RuntimeBootstrap.Services?.Resolve<RuntimeOptionsPersistenceService>();
+            this.runtimeOptionsReloadCoordinator = RuntimeBootstrap.Services?.Resolve<RuntimeOptionsReloadCoordinator>();
             this.EnsureRuntimeOptionsReloadSubscription();
             var toolBarPolicyDebugOverlay = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerPolicyDebugOverlay>();
             var uiStyleTokens = RuntimeBootstrap.Services?.Resolve<UiStyleTokens>();
@@ -250,7 +252,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 return;
             }
 
-            this.runtimeOptionsReloadSubscription = this.eventBus?.Subscribe<RuntimeOptionsReloadedEvent>(this.OnRuntimeOptionsReloaded);
+            this.runtimeOptionsReloadSubscription = this.runtimeOptionsReloadCoordinator?.RegisterHandler(this);
             this.runtimeOptionsSubscriptionAttached = this.runtimeOptionsReloadSubscription != null;
             if (this.runtimeOptionsSubscriptionAttached)
             {
@@ -3150,7 +3152,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     }
 
                     this.TryLogToolBarPolicyCacheDiagnostics(reason);
-                    this.toolBarDateRunnerPolicyCoordinator?.InvalidateCache();
+                    this.toolBarDateRunnerPolicyCoordinator?.InvalidateCache(reason);
                     this.lastPolicyUndoneWorkKind = currentUndoneWorkKind;
                 }
 
@@ -3398,19 +3400,22 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             RuntimeLog.Info("[ToolBarDateRunnerPolicy] RuntimeOptions persistence service unavailable. Keep in-memory preset only.");
         }
 
-        private void OnRuntimeOptionsReloaded(RuntimeOptionsReloadedEvent evt)
+        public void ApplyRuntimeOptions(RuntimeOptions options, string source)
         {
-            if (evt == null || evt.Options == null)
+            if (options == null)
             {
                 return;
             }
 
-            this.runtimeOptions = evt.Options;
+            this.runtimeOptions = options;
             this.ApplyDebugOverlayKeyBindingsFromOptions();
             this.toolBarDateRunnerPolicyDebugOverlayAdapter?.UpdateRuntimeOptions(this.runtimeOptions);
+            var reloadReason = string.Format("RuntimeOptions reloaded from {0}", string.IsNullOrWhiteSpace(source) ? "unknown" : source);
+            this.TryLogToolBarPolicyCacheDiagnostics(reloadReason);
+            this.ApplyToolBarDateRunnerPolicyBridge(reloadReason);
             RuntimeLog.Info(string.Format(
                 "[ToolBarDateRunnerPolicy] RuntimeOptions reloaded from {0}. Toggle={1}, Group={2}, Reload={3}.",
-                string.IsNullOrWhiteSpace(evt.Source) ? "unknown" : evt.Source,
+                string.IsNullOrWhiteSpace(source) ? "unknown" : source,
                 this.debugOverlayToggleKey,
                 this.debugOverlayGroupToggleKey,
                 this.debugOverlayReloadKey));
@@ -3660,7 +3665,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 diagnostics));
         }
 
-        private ToolBarDateRunnerPolicySnapshot ApplyToolBarDateRunnerPolicyBridge()
+        private ToolBarDateRunnerPolicySnapshot ApplyToolBarDateRunnerPolicyBridge(string reason = null)
         {
             if (this.toolBarDateRunnerPolicyCoordinator == null)
             {
@@ -3671,13 +3676,13 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             var transitionDiagnostics = this.toolBarDateRunnerPolicyCoordinator.TryBuildTransitionDiagnostics(
                 snapshot,
                 this.runtimeOptions,
-                this.UndoneWorks.Peek().Kind.ToString());
+                string.IsNullOrWhiteSpace(reason) ? this.UndoneWorks.Peek().Kind.ToString() : reason);
             if (!string.IsNullOrWhiteSpace(transitionDiagnostics))
             {
                 RuntimeLog.Info(transitionDiagnostics);
                 this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
                     "Transition",
-                    this.UndoneWorks.Peek().Kind.ToString(),
+                    string.IsNullOrWhiteSpace(reason) ? this.UndoneWorks.Peek().Kind.ToString() : reason,
                     snapshot,
                     transitionDiagnostics));
             }

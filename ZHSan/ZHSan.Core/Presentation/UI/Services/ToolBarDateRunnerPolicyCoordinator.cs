@@ -5,7 +5,7 @@ using System;
 
 namespace ZHSan.Core.Presentation.UI.Services
 {
-    public sealed class ToolBarDateRunnerPolicyCoordinator
+    public sealed class ToolBarDateRunnerPolicyCoordinator : IRuntimeOptionsReloadHandler
     {
         private readonly ToolBarDateRunnerInteractionService interactionService;
         private readonly ToolBarDateRunnerPolicyInputBuilder inputBuilder;
@@ -17,6 +17,7 @@ namespace ZHSan.Core.Presentation.UI.Services
         private bool hasLoggedTransitionSnapshot;
         private ToolBarDateRunnerPolicySnapshot lastTransitionSnapshot;
         private int invalidationCount;
+        private string lastInvalidationReason;
         private DateTime lastDiagnosticsLoggedAtUtc = DateTime.MinValue;
         public int CacheHitCount { get; private set; }
         public int CacheMissCount { get; private set; }
@@ -54,9 +55,21 @@ namespace ZHSan.Core.Presentation.UI.Services
             return snapshot;
         }
 
-        public void InvalidateCache()
+        public int InvalidationCount => this.invalidationCount;
+
+        public string LastInvalidationReason => this.lastInvalidationReason;
+
+        public void ApplyRuntimeOptions(RuntimeOptions options, string source)
+        {
+            this.InvalidateCache(string.Format(
+                "RuntimeOptions reloaded from {0}",
+                string.IsNullOrWhiteSpace(source) ? "unknown" : source));
+        }
+
+        public void InvalidateCache(string reason = null)
         {
             this.invalidationCount++;
+            this.lastInvalidationReason = string.IsNullOrWhiteSpace(reason) ? "unspecified" : reason;
             this.hasCache = false;
         }
 
@@ -100,8 +113,10 @@ namespace ZHSan.Core.Presentation.UI.Services
             var hitRate = (this.CacheHitCount * 100.0) / total;
             var missRate = (this.CacheMissCount * 100.0) / total;
             return string.Format(
-                "[ToolBarDateRunnerPolicy] Cache invalidated ({0}). Hits={1}, Misses={2}, HitRate={3:F2}%, MissRate={4:F2}%.",
+                "[ToolBarDateRunnerPolicy] Cache invalidated ({0}). LastReason={1}, Invalidations={2}, Hits={3}, Misses={4}, HitRate={5:F2}%, MissRate={6:F2}%.",
                 reason ?? "unspecified",
+                this.lastInvalidationReason ?? "unspecified",
+                this.invalidationCount,
                 this.CacheHitCount,
                 this.CacheMissCount,
                 hitRate,
