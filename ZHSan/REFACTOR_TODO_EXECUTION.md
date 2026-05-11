@@ -93,7 +93,32 @@
 - [x] 已完成可观测性首轮：协调器增加 CacheHitCount/CacheMissCount 计数器。
 - [x] 已完成更细粒度 UI 事件失效触发首轮：按 Help/ContextMenu/OptionDialog 显隐变化触发 coordinator 缓存失效。
 - [x] 已完成失效触发与诊断日志联动首轮：缓存失效前输出 PolicyCoordinator 命中/失效统计（HitRate/MissRate）。
-- [ ] 下一步：推进 C-3 后续批次，补充诊断日志采样/节流策略（避免高频帧循环日志噪音）。
+- [x] 已完成 C-3 后续批次首项：补充策略缓存诊断日志采样/节流策略（采样频率 + 最小时间间隔，可由 RuntimeOptions 配置）。
+- [x] 已完成 C-3 后续批次第二项：补充策略快照字段级诊断（仅在状态跃迁时输出差异摘要）并接入可选 debug 开关。
+- [x] 已完成 C-3 后续批次第三项：沉淀策略诊断事件模型（UiEvent），并在 MainGameScreen 发布 Cache/Transition 诊断事件，支持外部面板订阅展示链路。
+- [x] 已完成 C-3 后续批次第四项：新增策略诊断订阅示例面板（ToolBarDateRunnerPolicyDebugOverlay 服务），通过订阅 UiEvent 聚合最近诊断消息，用于后续 Overlay 绑定展示。
+- [x] 已完成启用/禁用开关行为核对：在 EnablePolicyTransitionDebugLog 开关关闭时不产出 Transition 事件消息，开启时按状态跃迁产出差异摘要消息（由 DebugOverlay 订阅可见）。
+- [x] 已完成 C-3 后续批次第五项（配置先行）：为 ToolBarDateRunnerPolicyDebugOverlay 增加最大消息条数/类别过滤配置（RuntimeOptions: DiagnosticsOverlayMaxMessages/DiagnosticsOverlayMinimumCategory）并接入启动装配。
+- [x] 已完成 C-3 后续批次第六项：将 ToolBarDateRunnerPolicyDebugOverlay 绑定到 Myra Overlay 层（Adapter + Layer Register），并按 RuntimeOptions.Debug.ShowDebugOverlay 接入显隐开关刷新。
+- [x] 已完成 C-3 后续批次第七项（渲染前置）：为 DebugOverlay 适配器补充文本列表/滚动 ViewModel（Messages/ScrollOffset/MaxVisibleLines）并接入基础样式令牌（字号、间距、透明度字段）。
+- [x] 已完成 C-3 后续批次第八项（首版可视绑定）：在 DebugOverlayAdapter 增加 Widget 行文本快照构造（Panel/Label 列表绑定输入），并接入滚轮输入映射以驱动 ScrollOffset。
+- [x] 已完成 C-3 后续批次第九项：补充 DebugOverlay Widget 生命周期（Ensure/Create + Release/Destroy）与增量刷新判定（按行差异刷新，避免每帧重建文本项）。
+- [x] 已完成 C-3 后续批次第十项：为 DebugOverlay 增加诊断分组视图（Cache/Transition 分栏）并补充快捷键开关（F10 显隐、F11 分组切换）。
+- [x] 已完成 C-3 后续批次第十一项：将 DebugOverlay 快捷键下沉为可配置输入映射（RuntimeOptions.Input: DebugOverlayToggleKey/DebugOverlayGroupToggleKey），并补充按键冲突检测日志（同键冲突时 Group 回退 F11）。
+- [x] 已完成 C-3 后续批次第十二项：为 DebugOverlay 输入映射补充运行时热更新入口（F9 重载 RuntimeOptions 并即时应用键位）与提示文案日志（显隐/分组/重载）。
+- [x] 已完成 C-3 后续批次第十三项：将 DebugOverlay 热更新从“按键触发重载”下沉为统一 Runtime 配置重载事件（RuntimeOptionsReloadedEvent，经 EventBus 广播）。
+- [x] 已完成 C-3 后续批次第十四项：补充 RuntimeOptions 重载事件多订阅方接入示例（RuntimeOptionsReloadDiagnosticsSubscriber）与失败回退提示（文件缺失/加载空返回日志）。
+- [x] 已完成 C-3 后续批次第十五项：梳理 RuntimeOptions 重载事件订阅生命周期管理（MainGameScreen/ReloadSubscriber 释放时取消订阅 + 重复订阅防护日志）。
+- [x] 已完成 C-3 后续批次第十六项：补充 RuntimeOptions 重载事件订阅健康诊断计数（Attach/Detach/SkipDuplicate），并通过 Subscription 诊断事件接入统一诊断面板通道。
+- [x] 已完成 C-3 后续批次第十七项：补充 DebugOverlay 分组切换模式文案（Cache/Transition/Misc）并接入配置化默认分组显示策略（RuntimeOptions 默认组开关）。
+- [x] 已完成 C-3 后续批次第十八项：为 DebugOverlay 分组策略补充场景化预设（Performance/Debug/Minimal）并支持运行时一键切换（默认 F8）。
+- [x] 已完成 C-3 后续批次第十九项：为预设切换补充状态持久化策略（切换后回写 RuntimeOptions.json）并增加冲突优先级说明日志（Preset > GroupToggle）。
+- [x] 已完成 C-3 后续批次第二十项：补充 RuntimeOptions 回写失败可观测性细化（错误类型/消息/路径/尝试次数）并增加重试策略开关（Enable + RetryCount）。
+- [x] 已完成 C-3 后续批次第二十一项：抽离 RuntimeOptions 持久化服务（RuntimeOptionsPersistenceService，与 MainGameScreen 解耦）并接入统一失败事件上报（RuntimeOptionsPersistenceFailedEvent）。
+- [x] 已完成 C-3 后续批次第二十二项：为持久化失败事件补充分级告警策略（FirstFailure/ConsecutiveFailure）并通过 PersistenceAlert 诊断事件接入 Overlay 高亮提示通道。
+- [x] 已完成 C-3 后续批次第二十三项：补充持久化“恢复成功”事件（RuntimeOptionsPersistenceSucceededEvent）并在 AlertService 中清零连续失败计数（发布 Recovery 诊断消息）。
+- [x] 已完成 C-3 后续批次第二十四项：为 PersistenceAlert 增加可配置告警阈值（Threshold）并支持静默窗口（QuietWindowMs）。
+- [ ] 下一步：推进 C-3 后续批次，补充 PersistenceAlert 配置变更后的即时生效链路（重载后无须重启服务）与阈值命中统计。
 
 ---
 
@@ -173,7 +198,7 @@
 ---
 
 ## 4. Phase C — UI 插件迁移（第 4~8 周）
-> 当前状态：**进行中（C-1 已完成，C-2 部分完成，C-3 未开始）**
+> 当前状态：**进行中（C-1 已完成，C-2 部分完成，C-3 持续推进中）**
 
 > 顺序：低风险（通用弹窗）-> 中风险（列表/详情）-> 高风险（复杂组合面板）
 
