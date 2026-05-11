@@ -1,11 +1,16 @@
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
+using ZHSan.Core.Presentation.UI.Events;
 
 namespace ZHSan.Core.Presentation.UI.ViewModels
 {
     public sealed class ToolBarDateRunnerPolicyDebugOverlayViewModel
     {
         public List<string> Messages { get; set; } = new List<string>();
+
+        public RuntimeOptionsPersistenceAlertSnapshot PersistenceAlertSnapshot { get; set; }
+
+        public List<string> PersistenceAlertLines { get; set; } = new List<string>();
 
         public int FontSize { get; set; }
 

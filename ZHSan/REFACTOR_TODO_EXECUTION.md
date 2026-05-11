@@ -118,7 +118,11 @@
 - [x] 已完成 C-3 后续批次第二十二项：为持久化失败事件补充分级告警策略（FirstFailure/ConsecutiveFailure）并通过 PersistenceAlert 诊断事件接入 Overlay 高亮提示通道。
 - [x] 已完成 C-3 后续批次第二十三项：补充持久化“恢复成功”事件（RuntimeOptionsPersistenceSucceededEvent）并在 AlertService 中清零连续失败计数（发布 Recovery 诊断消息）。
 - [x] 已完成 C-3 后续批次第二十四项：为 PersistenceAlert 增加可配置告警阈值（Threshold）并支持静默窗口（QuietWindowMs）。
-- [ ] 下一步：推进 C-3 后续批次，补充 PersistenceAlert 配置变更后的即时生效链路（重载后无须重启服务）与阈值命中统计。
+- [x] 已完成 C-3 后续批次第二十五项：补充 PersistenceAlert 配置热重载即时生效链路（订阅 RuntimeOptionsReloadedEvent，无须重启服务）与阈值命中统计（ThresholdHits/EmittedAlerts/QuietSuppressed）。
+- [x] 已完成 C-3 后续批次第二十六项：补充 PersistenceAlert 统计快照结构化模型，并打通 AlertService -> DiagnosticsEvent typed snapshot -> DebugOverlay -> ViewModel/WidgetLines 展示链路；同步让 DebugOverlay 的 MaxMessages/MinimumCategory 支持 RuntimeOptionsReloadedEvent 热重载生效。
+- [x] 已完成 C-3 后续批次第二十七项：新增 RuntimeOptionsReloadCoordinator + IRuntimeOptionsReloadHandler，集中 RuntimeOptionsReloadedEvent 订阅与分发；ToolBarDateRunnerInteractionService/RuntimeOptionsReloadDiagnosticsSubscriber/PersistenceAlertService/DebugOverlay/MainGameScreen 统一走 ApplyRuntimeOptions/注册句柄，减少分散订阅与重复刷新。
+- [x] 已完成 C-3 后续批次第二十八项：补齐 ToolBarDateRunnerPolicy 热重载后的缓存失效协同（PolicyCoordinator 接入 ReloadCoordinator，配置重载时统一 InvalidateCache，并由 MainGameScreen 记录缓存诊断后立即刷新策略快照）。
+- [ ] 下一步：推进 C-3 后续批次，继续整理 ToolBarDateRunnerPolicy 热重载诊断事件模型（将 Cache/Transition/Reload 诊断 payload 结构化，减少 Overlay 对文本格式的依赖）。
 
 ---
 

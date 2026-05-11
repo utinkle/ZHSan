@@ -1,16 +1,28 @@
+using ZHSan.Core.Infrastructure.Configuration;
+
 namespace ZHSan.Core.Presentation.UI.Services
 {
     /// <summary>
     /// C-3 高风险迁移前置：集中定义 ToolBar 与 DateRunner 的交互策略，
-    /// 先以只读策略服务落地，后续替换旧插件联动逻辑时可统一复用。
+    /// 通过 RuntimeOptionsReloadCoordinator 热更新策略参数，后续替换旧插件联动逻辑时可统一复用。
     /// </summary>
-    public sealed class ToolBarDateRunnerInteractionService
+    public sealed class ToolBarDateRunnerInteractionService : IRuntimeOptionsReloadHandler
     {
-        private readonly bool suspendOnOptionDialog;
+        private bool suspendOnOptionDialog;
 
         public ToolBarDateRunnerInteractionService(bool suspendOnOptionDialog = true)
         {
             this.suspendOnOptionDialog = suspendOnOptionDialog;
+        }
+
+        public ToolBarDateRunnerInteractionService(RuntimeOptions runtimeOptions)
+        {
+            this.ApplyRuntimeOptions(runtimeOptions, "Bootstrap");
+        }
+
+        public void ApplyRuntimeOptions(RuntimeOptions options, string source)
+        {
+            this.suspendOnOptionDialog = options?.Ui?.ToolBarDateRunnerPolicy?.SuspendOnOptionDialog ?? true;
         }
 
         public ToolBarDateRunnerPolicyDecision Evaluate(ToolBarDateRunnerPolicyInput input)
