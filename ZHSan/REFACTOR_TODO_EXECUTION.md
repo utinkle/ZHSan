@@ -127,7 +127,15 @@
 - [x] 已完成 C-3 后续批次第三十一项：治理 DebugOverlay 分类交互体验，新增显式当前滚动分组与分组标题焦点提示，滚轮仅作用于当前焦点分组，并将每组可见行数接入 RuntimeOptions（DiagnosticsOverlayMaxVisibleLinesPerGroup）及配置校验/示例文件。
 - [x] 已完成 C-3 后续批次第三十二项：收敛 DebugOverlay 输入配置，新增当前滚动分组切换键位（DebugOverlayScrollGroupKey，默认 F7）并接入 RuntimeOptions 加载/热更新/示例配置；补充 Toggle/Group/Reload/Preset/ScrollGroup 键位冲突检测与 fallback 日志。
 - [x] 已完成 C-3 后续批次第三十三项：整理 DebugOverlay 输入职责边界，新增 Input 结构化诊断快照并将显隐、分组显隐、分组焦点、预设切换与键位冲突提示统一发布为 ToolBarDateRunnerPolicyDiagnosticsEvent（保留 RuntimeLog 兼容输出）。
-- [ ] 下一步：推进 C-3 后续批次，继续治理 DebugOverlay 诊断事件噪声（为 Input 类诊断增加节流/去重策略，避免高频快捷键或冲突日志刷屏）。
+- [x] 已完成 C-3 后续批次第三十四项：治理 DebugOverlay Input 诊断噪声，增加可配置节流窗口（InputDiagnosticsMinIntervalMs）与重复消息去重开关（InputDiagnosticsEnableDedup），并补充抑制计数汇总日志。
+- [x] 已完成 C-3 后续批次第三十五项：将 Input 节流/去重状态接入结构化快照（SuppressedCount/DedupWindowMs/DedupEnabled/ElapsedSinceLastPublishedMs），并在 Overlay Input 分组展示抑制统计与命中窗口信息。
+- [x] 已完成 C-3 后续批次第三十六项：为 Input 去重命中增加采样统计累计指标（最近 N 秒 suppress/publish 计数），并在 Overlay 展示命中率趋势（Trend SuppressionRate）。
+- [x] 已完成 C-3 后续批次第三十七项：将 Input 趋势窗口参数接入热重载即时可观测性提示，窗口变更时发布 TrendWindowReload 输入诊断并输出变更前后对比摘要（before -> after + source）。
+- [x] 已完成 C-3 后续批次第三十八项：为 TrendWindowReload 增加“变更后首个采样快照”标记（IsFirstSampleAfterTrendWindowReload），并在 Overlay Input 分组显示确认文案，便于快速验证新窗口生效。
+- [x] 已完成 C-3 后续批次第三十九项：为 TrendWindowReload 首样本提示增加自动消隐倒计时文案（默认 3s），并在 Overlay Input 分组按秒更新剩余时间后自动隐藏，避免长期占用诊断行。
+- [x] 已完成 C-3 后续批次第四十项：将首样本倒计时时长参数化到 RuntimeOptions（InputDiagnosticsFirstSampleHintSeconds），并接入加载校验与热重载即时生效链路。
+- [x] 已完成 C-3 后续批次第四十一项：将 Input 诊断节流/趋势/首样本提示配置变更汇总为单条 Reload 摘要（InputDiagnosticsReloadSummary），减少重复日志行；趋势窗口变更仍保留首样本标记触发。
+- [ ] 下一步：推进 C-3 后续批次，继续治理 DebugOverlay 诊断事件噪声（为 Reload 摘要补充“无变更跳过发布”计数统计并在 Overlay 展示）。
 
 ---
 
