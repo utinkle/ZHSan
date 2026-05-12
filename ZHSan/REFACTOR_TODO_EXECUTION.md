@@ -122,7 +122,12 @@
 - [x] 已完成 C-3 后续批次第二十六项：补充 PersistenceAlert 统计快照结构化模型，并打通 AlertService -> DiagnosticsEvent typed snapshot -> DebugOverlay -> ViewModel/WidgetLines 展示链路；同步让 DebugOverlay 的 MaxMessages/MinimumCategory 支持 RuntimeOptionsReloadedEvent 热重载生效。
 - [x] 已完成 C-3 后续批次第二十七项：新增 RuntimeOptionsReloadCoordinator + IRuntimeOptionsReloadHandler，集中 RuntimeOptionsReloadedEvent 订阅与分发；ToolBarDateRunnerInteractionService/RuntimeOptionsReloadDiagnosticsSubscriber/PersistenceAlertService/DebugOverlay/MainGameScreen 统一走 ApplyRuntimeOptions/注册句柄，减少分散订阅与重复刷新。
 - [x] 已完成 C-3 后续批次第二十八项：补齐 ToolBarDateRunnerPolicy 热重载后的缓存失效协同（PolicyCoordinator 接入 ReloadCoordinator，配置重载时统一 InvalidateCache，并由 MainGameScreen 记录缓存诊断后立即刷新策略快照）。
-- [ ] 下一步：推进 C-3 后续批次，继续整理 ToolBarDateRunnerPolicy 热重载诊断事件模型（将 Cache/Transition/Reload 诊断 payload 结构化，减少 Overlay 对文本格式的依赖）。
+- [x] 已完成 C-3 后续批次第二十九项：整理 ToolBarDateRunnerPolicy 热重载诊断事件模型，新增 Cache/Transition/Reload 结构化 payload 与 Overlay typed entry/snapshot 消费链路，减少 Overlay 对文本前缀解析的依赖。
+- [x] 已完成 C-3 后续批次第三十项：收敛 ToolBarDateRunnerPolicy 诊断面板渲染数据流，按 Cache/Transition/Misc 分类维护容量队列与独立滚动偏移，并在 Overlay 渲染层过滤 latest structured snapshot 对应的原始消息重复展示。
+- [x] 已完成 C-3 后续批次第三十一项：治理 DebugOverlay 分类交互体验，新增显式当前滚动分组与分组标题焦点提示，滚轮仅作用于当前焦点分组，并将每组可见行数接入 RuntimeOptions（DiagnosticsOverlayMaxVisibleLinesPerGroup）及配置校验/示例文件。
+- [x] 已完成 C-3 后续批次第三十二项：收敛 DebugOverlay 输入配置，新增当前滚动分组切换键位（DebugOverlayScrollGroupKey，默认 F7）并接入 RuntimeOptions 加载/热更新/示例配置；补充 Toggle/Group/Reload/Preset/ScrollGroup 键位冲突检测与 fallback 日志。
+- [x] 已完成 C-3 后续批次第三十三项：整理 DebugOverlay 输入职责边界，新增 Input 结构化诊断快照并将显隐、分组显隐、分组焦点、预设切换与键位冲突提示统一发布为 ToolBarDateRunnerPolicyDiagnosticsEvent（保留 RuntimeLog 兼容输出）。
+- [ ] 下一步：推进 C-3 后续批次，继续治理 DebugOverlay 诊断事件噪声（为 Input 类诊断增加节流/去重策略，避免高频快捷键或冲突日志刷屏）。
 
 ---
 

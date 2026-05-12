@@ -77,6 +77,11 @@ namespace ZHSan.Core.Infrastructure.Configuration
                     log?.Invoke("[RuntimeOptionsLoader] Invalid diagnosticsOverlayMaxMessages detected. Fallback to 30.");
                     options.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayMaxMessages = 30;
                 }
+                if (options.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayMaxVisibleLinesPerGroup <= 0)
+                {
+                    log?.Invoke("[RuntimeOptionsLoader] Invalid diagnosticsOverlayMaxVisibleLinesPerGroup detected. Fallback to 6.");
+                    options.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayMaxVisibleLinesPerGroup = 6;
+                }
                 if (options.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayPersistenceRetryCount < 0)
                 {
                     log?.Invoke("[RuntimeOptionsLoader] Invalid diagnosticsOverlayPersistenceRetryCount detected. Fallback to 1.");
@@ -110,6 +115,7 @@ namespace ZHSan.Core.Infrastructure.Configuration
             options.Input.DebugOverlayGroupToggleKey = NormalizeKeyBinding(options.Input.DebugOverlayGroupToggleKey, "F11", "debugOverlayGroupToggleKey", log);
             options.Input.DebugOverlayReloadKey = NormalizeKeyBinding(options.Input.DebugOverlayReloadKey, "F9", "debugOverlayReloadKey", log);
             options.Input.DebugOverlayPresetCycleKey = NormalizeKeyBinding(options.Input.DebugOverlayPresetCycleKey, "F8", "debugOverlayPresetCycleKey", log);
+            options.Input.DebugOverlayScrollGroupKey = NormalizeKeyBinding(options.Input.DebugOverlayScrollGroupKey, "F7", "debugOverlayScrollGroupKey", log);
             options.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayPreset = NormalizeOverlayPreset(options.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayPreset, log);
 
             if (options.Ui.TabListProfiles.Overrides == null)

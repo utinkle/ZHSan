@@ -48,7 +48,7 @@ namespace ZHSan.Core.Infrastructure.Runtime
                 Services.Resolve<IEventBus>(),
                 Services.Resolve<RuntimeOptions>());
             Services.RegisterSingleton(toolBarDateRunnerPolicyDebugOverlay);
-            var runtimeOptionsReloadDiagnosticsSubscriber = new RuntimeOptionsReloadDiagnosticsSubscriber();
+            var runtimeOptionsReloadDiagnosticsSubscriber = new RuntimeOptionsReloadDiagnosticsSubscriber(Services.Resolve<IEventBus>());
             Services.RegisterSingleton(runtimeOptionsReloadDiagnosticsSubscriber);
             var runtimeOptionsPersistenceAlertService = new RuntimeOptionsPersistenceAlertService(
                 Services.Resolve<IEventBus>(),

@@ -119,10 +119,12 @@ namespace WorldOfTheThreeKingdoms.GameScreens
         private bool lastDebugOverlayGroupToggleKeyDown;
         private bool lastDebugOverlayReloadKeyDown;
         private bool lastDebugOverlayPresetCycleKeyDown;
+        private bool lastDebugOverlayScrollGroupKeyDown;
         private Keys debugOverlayToggleKey = Keys.F10;
         private Keys debugOverlayGroupToggleKey = Keys.F11;
         private Keys debugOverlayReloadKey = Keys.F9;
         private Keys debugOverlayPresetCycleKey = Keys.F8;
+        private Keys debugOverlayScrollGroupKey = Keys.F7;
         private IDisposable runtimeOptionsReloadSubscription;
         private bool runtimeOptionsSubscriptionAttached;
         private int runtimeOptionsSubscriptionAttachCount;
@@ -3294,7 +3296,12 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             if (toggleOverlayKeyDown && !this.lastDebugOverlayToggleKeyDown && this.runtimeOptions?.Debug != null)
             {
                 this.runtimeOptions.Debug.ShowDebugOverlay = !this.runtimeOptions.Debug.ShowDebugOverlay;
-                RuntimeLog.Info(string.Format("[ToolBarDateRunnerPolicy] DebugOverlay visibility: {0}", this.runtimeOptions.Debug.ShowDebugOverlay ? "ON" : "OFF"));
+                this.PublishDebugOverlayInputDiagnostics(
+                    "Visibility",
+                    this.debugOverlayToggleKey,
+                    this.runtimeOptions.Debug.ShowDebugOverlay ? "ON" : "OFF",
+                    string.Empty,
+                    string.Format("[ToolBarDateRunnerPolicy] DebugOverlay visibility: {0}", this.runtimeOptions.Debug.ShowDebugOverlay ? "ON" : "OFF"));
             }
 
             this.lastDebugOverlayToggleKeyDown = toggleOverlayKeyDown;
@@ -3303,9 +3310,14 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             if (toggleGroupKeyDown && !this.lastDebugOverlayGroupToggleKeyDown)
             {
                 var modeText = this.toolBarDateRunnerPolicyDebugOverlayAdapter?.ToggleGroupVisibility();
-                RuntimeLog.Info(string.Format("[ToolBarDateRunnerPolicy] DebugOverlay group mode switched ({0}): {1}.",
+                this.PublishDebugOverlayInputDiagnostics(
+                    "GroupVisibility",
                     this.debugOverlayGroupToggleKey,
-                    string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText));
+                    string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText,
+                    string.Empty,
+                    string.Format("[ToolBarDateRunnerPolicy] DebugOverlay group mode switched ({0}): {1}.",
+                        this.debugOverlayGroupToggleKey,
+                        string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText));
             }
 
             this.lastDebugOverlayGroupToggleKeyDown = toggleGroupKeyDown;
@@ -3327,13 +3339,60 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     this.runtimeOptions.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayPreset = preset;
                     this.PersistRuntimeOptionsSnapshot();
                 }
-                RuntimeLog.Info(string.Format("[ToolBarDateRunnerPolicy] DebugOverlay preset switched ({0}): {1}.",
+                this.PublishDebugOverlayInputDiagnostics(
+                    "Preset",
                     this.debugOverlayPresetCycleKey,
-                    string.IsNullOrWhiteSpace(preset) ? "N/A" : preset));
-                RuntimeLog.Info("[ToolBarDateRunnerPolicy] Preset priority: preset switch overrides group flags; manual F11 group toggle applies as session-local override until next preset switch/reload.");
+                    string.IsNullOrWhiteSpace(preset) ? "N/A" : preset,
+                    "Preset switch overrides group flags; manual group toggle applies as session-local override until next preset switch/reload.",
+                    string.Format("[ToolBarDateRunnerPolicy] DebugOverlay preset switched ({0}): {1}.",
+                        this.debugOverlayPresetCycleKey,
+                        string.IsNullOrWhiteSpace(preset) ? "N/A" : preset));
+                this.PublishDebugOverlayInputDiagnostics(
+                    "PresetPriority",
+                    this.debugOverlayPresetCycleKey,
+                    "SessionLocalOverride",
+                    "Preset switch overrides group flags; manual F11 group toggle applies as session-local override until next preset switch/reload.",
+                    "[ToolBarDateRunnerPolicy] Preset priority: preset switch overrides group flags; manual F11 group toggle applies as session-local override until next preset switch/reload.");
             }
 
             this.lastDebugOverlayPresetCycleKeyDown = presetCycleKeyDown;
+
+            var scrollGroupKeyDown = state.IsKeyDown(this.debugOverlayScrollGroupKey);
+            if (scrollGroupKeyDown && !this.lastDebugOverlayScrollGroupKeyDown)
+            {
+                var modeText = this.toolBarDateRunnerPolicyDebugOverlayAdapter?.CycleActiveScrollGroup();
+                this.PublishDebugOverlayInputDiagnostics(
+                    "ScrollFocus",
+                    this.debugOverlayScrollGroupKey,
+                    string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText,
+                    string.Empty,
+                    string.Format("[ToolBarDateRunnerPolicy] DebugOverlay scroll focus switched ({0}): {1}.",
+                        this.debugOverlayScrollGroupKey,
+                        string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText));
+            }
+
+            this.lastDebugOverlayScrollGroupKeyDown = scrollGroupKeyDown;
+        }
+
+
+        private void PublishDebugOverlayInputDiagnostics(string action, Keys key, string result, string detail, string message)
+        {
+            RuntimeLog.Info(message ?? string.Empty);
+            var snapshot = new ToolBarDateRunnerPolicyInputDiagnosticsSnapshot(
+                action,
+                key.ToString(),
+                result,
+                detail);
+            this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
+                "Input",
+                snapshot.Action,
+                default,
+                message,
+                null,
+                null,
+                null,
+                null,
+                snapshot));
         }
 
         private void ApplyDebugOverlayKeyBindingsFromOptions()
@@ -3360,14 +3419,79 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             {
                 this.debugOverlayPresetCycleKey = presetCycleKey;
             }
-
-            if (this.debugOverlayToggleKey == this.debugOverlayGroupToggleKey)
+            Keys scrollGroupKey;
+            if (Enum.TryParse(this.runtimeOptions.Input.DebugOverlayScrollGroupKey, true, out scrollGroupKey))
             {
-                RuntimeLog.Info(string.Format(
-                    "[ToolBarDateRunnerPolicy] Debug overlay key conflict detected: Toggle and Group both mapped to {0}. Group fallback to F11.",
-                    this.debugOverlayToggleKey));
-                this.debugOverlayGroupToggleKey = Keys.F11;
+                this.debugOverlayScrollGroupKey = scrollGroupKey;
             }
+
+            this.debugOverlayGroupToggleKey = this.ResolveDebugOverlayKeyConflict(
+                "Group",
+                this.debugOverlayGroupToggleKey,
+                Keys.F11,
+                Keys.F6,
+                this.debugOverlayToggleKey);
+            this.debugOverlayReloadKey = this.ResolveDebugOverlayKeyConflict(
+                "Reload",
+                this.debugOverlayReloadKey,
+                Keys.F9,
+                Keys.F6,
+                this.debugOverlayToggleKey,
+                this.debugOverlayGroupToggleKey);
+            this.debugOverlayPresetCycleKey = this.ResolveDebugOverlayKeyConflict(
+                "Preset",
+                this.debugOverlayPresetCycleKey,
+                Keys.F8,
+                Keys.F6,
+                this.debugOverlayToggleKey,
+                this.debugOverlayGroupToggleKey,
+                this.debugOverlayReloadKey);
+            this.debugOverlayScrollGroupKey = this.ResolveDebugOverlayKeyConflict(
+                "ScrollGroup",
+                this.debugOverlayScrollGroupKey,
+                Keys.F7,
+                Keys.F6,
+                this.debugOverlayToggleKey,
+                this.debugOverlayGroupToggleKey,
+                this.debugOverlayReloadKey,
+                this.debugOverlayPresetCycleKey);
+        }
+
+
+        private Keys ResolveDebugOverlayKeyConflict(string keyName, Keys configuredKey, Keys fallbackKey, Keys secondaryFallbackKey, params Keys[] reservedKeys)
+        {
+            if (reservedKeys == null)
+            {
+                return configuredKey;
+            }
+
+            foreach (var reservedKey in reservedKeys)
+            {
+                if (configuredKey != reservedKey) continue;
+                var resolvedKey = fallbackKey;
+                foreach (var candidate in reservedKeys)
+                {
+                    if (resolvedKey == candidate)
+                    {
+                        resolvedKey = secondaryFallbackKey;
+                        break;
+                    }
+                }
+
+                this.PublishDebugOverlayInputDiagnostics(
+                    "KeyConflict",
+                    configuredKey,
+                    resolvedKey.ToString(),
+                    string.Format("{0} fallback", keyName ?? "Unknown"),
+                    string.Format(
+                        "[ToolBarDateRunnerPolicy] Debug overlay key conflict detected: {0} mapped to {1}. Fallback to {2}.",
+                        keyName ?? "Unknown",
+                        configuredKey,
+                        resolvedKey));
+                return resolvedKey;
+            }
+
+            return configuredKey;
         }
 
         private void ReloadRuntimeOptionsForDebugOverlay()
@@ -3414,11 +3538,13 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.TryLogToolBarPolicyCacheDiagnostics(reloadReason);
             this.ApplyToolBarDateRunnerPolicyBridge(reloadReason);
             RuntimeLog.Info(string.Format(
-                "[ToolBarDateRunnerPolicy] RuntimeOptions reloaded from {0}. Toggle={1}, Group={2}, Reload={3}.",
+                "[ToolBarDateRunnerPolicy] RuntimeOptions reloaded from {0}. Toggle={1}, Group={2}, Reload={3}, Preset={4}, ScrollGroup={5}.",
                 string.IsNullOrWhiteSpace(source) ? "unknown" : source,
                 this.debugOverlayToggleKey,
                 this.debugOverlayGroupToggleKey,
-                this.debugOverlayReloadKey));
+                this.debugOverlayReloadKey,
+                this.debugOverlayPresetCycleKey,
+                this.debugOverlayScrollGroupKey));
         }
 
         private void UpdateConmentText(GameTime gameTime)
@@ -3656,13 +3782,18 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 return;
             }
 
+            var cacheSnapshot = this.toolBarDateRunnerPolicyCoordinator.BuildCacheDiagnosticsSnapshot(reason);
             var diagnostics = this.toolBarDateRunnerPolicyCoordinator.BuildCacheDiagnostics(reason);
             RuntimeLog.Info(diagnostics);
             this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
                 "Cache",
                 reason,
                 default,
-                diagnostics));
+                diagnostics,
+                null,
+                cacheSnapshot,
+                null,
+                null));
         }
 
         private ToolBarDateRunnerPolicySnapshot ApplyToolBarDateRunnerPolicyBridge(string reason = null)
@@ -3673,18 +3804,24 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             }
 
             var snapshot = this.toolBarDateRunnerPolicyCoordinator.Evaluate(this, this.runtimeOptions, this.featureFlags);
-            var transitionDiagnostics = this.toolBarDateRunnerPolicyCoordinator.TryBuildTransitionDiagnostics(
+            var transitionReason = string.IsNullOrWhiteSpace(reason) ? this.UndoneWorks.Peek().Kind.ToString() : reason;
+            var transitionSnapshot = this.toolBarDateRunnerPolicyCoordinator.TryBuildTransitionDiagnosticsSnapshot(
                 snapshot,
                 this.runtimeOptions,
-                string.IsNullOrWhiteSpace(reason) ? this.UndoneWorks.Peek().Kind.ToString() : reason);
+                transitionReason);
+            var transitionDiagnostics = this.toolBarDateRunnerPolicyCoordinator.BuildTransitionDiagnostics(transitionSnapshot);
             if (!string.IsNullOrWhiteSpace(transitionDiagnostics))
             {
                 RuntimeLog.Info(transitionDiagnostics);
                 this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
                     "Transition",
-                    string.IsNullOrWhiteSpace(reason) ? this.UndoneWorks.Peek().Kind.ToString() : reason,
+                    transitionReason,
                     snapshot,
-                    transitionDiagnostics));
+                    transitionDiagnostics,
+                    null,
+                    null,
+                    transitionSnapshot,
+                    null));
             }
 
             if (snapshot.Decision.SuspendDateRunner)
