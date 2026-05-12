@@ -46,6 +46,7 @@ namespace ZHSan.Core.Infrastructure.Configuration
         public int CacheDiagnosticsLogMinIntervalMs { get; set; } = 5000;
         public bool EnablePolicyTransitionDebugLog { get; set; } = false;
         public int DiagnosticsOverlayMaxMessages { get; set; } = 30;
+        public int DiagnosticsOverlayMaxVisibleLinesPerGroup { get; set; } = 6;
         public string DiagnosticsOverlayMinimumCategory { get; set; } = "Cache";
         public bool DiagnosticsOverlayShowCacheGroupByDefault { get; set; } = true;
         public bool DiagnosticsOverlayShowTransitionGroupByDefault { get; set; } = true;
@@ -105,6 +106,7 @@ namespace ZHSan.Core.Infrastructure.Configuration
         public string DebugOverlayGroupToggleKey { get; set; } = "F11";
         public string DebugOverlayReloadKey { get; set; } = "F9";
         public string DebugOverlayPresetCycleKey { get; set; } = "F8";
+        public string DebugOverlayScrollGroupKey { get; set; } = "F7";
     }
 
     public sealed class DebugOptions

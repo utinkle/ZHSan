@@ -2,6 +2,7 @@ using ZHSan.Core.Infrastructure.Configuration;
 using ZHSan.Core.Infrastructure.FeatureFlags;
 using WorldOfTheThreeKingdoms.GameScreens;
 using System;
+using ZHSan.Core.Presentation.UI.Events;
 
 namespace ZHSan.Core.Presentation.UI.Services
 {
@@ -102,28 +103,43 @@ namespace ZHSan.Core.Presentation.UI.Services
             return true;
         }
 
-        public string BuildCacheDiagnostics(string reason)
+        public ToolBarDateRunnerPolicyCacheDiagnosticsSnapshot BuildCacheDiagnosticsSnapshot(string reason)
         {
             var total = this.CacheHitCount + this.CacheMissCount;
-            if (total <= 0)
-            {
-                return "[ToolBarDateRunnerPolicy] Cache invalidated before first evaluation.";
-            }
-
-            var hitRate = (this.CacheHitCount * 100.0) / total;
-            var missRate = (this.CacheMissCount * 100.0) / total;
-            return string.Format(
-                "[ToolBarDateRunnerPolicy] Cache invalidated ({0}). LastReason={1}, Invalidations={2}, Hits={3}, Misses={4}, HitRate={5:F2}%, MissRate={6:F2}%.",
-                reason ?? "unspecified",
-                this.lastInvalidationReason ?? "unspecified",
+            var beforeFirstEvaluation = total <= 0;
+            var hitRate = beforeFirstEvaluation ? 0.0 : (this.CacheHitCount * 100.0) / total;
+            var missRate = beforeFirstEvaluation ? 0.0 : (this.CacheMissCount * 100.0) / total;
+            return new ToolBarDateRunnerPolicyCacheDiagnosticsSnapshot(
+                reason,
+                this.lastInvalidationReason,
                 this.invalidationCount,
                 this.CacheHitCount,
                 this.CacheMissCount,
                 hitRate,
-                missRate);
+                missRate,
+                beforeFirstEvaluation);
         }
 
-        public string TryBuildTransitionDiagnostics(ToolBarDateRunnerPolicySnapshot currentSnapshot, RuntimeOptions options, string reason)
+        public string BuildCacheDiagnostics(string reason)
+        {
+            var snapshot = this.BuildCacheDiagnosticsSnapshot(reason);
+            if (snapshot.BeforeFirstEvaluation)
+            {
+                return "[ToolBarDateRunnerPolicy] Cache invalidated before first evaluation.";
+            }
+
+            return string.Format(
+                "[ToolBarDateRunnerPolicy] Cache invalidated ({0}). LastReason={1}, Invalidations={2}, Hits={3}, Misses={4}, HitRate={5:F2}%, MissRate={6:F2}%.",
+                snapshot.Reason,
+                snapshot.LastInvalidationReason,
+                snapshot.InvalidationCount,
+                snapshot.CacheHitCount,
+                snapshot.CacheMissCount,
+                snapshot.HitRate,
+                snapshot.MissRate);
+        }
+
+        public ToolBarDateRunnerPolicyTransitionDiagnosticsSnapshot TryBuildTransitionDiagnosticsSnapshot(ToolBarDateRunnerPolicySnapshot currentSnapshot, RuntimeOptions options, string reason)
         {
             if (options?.Ui?.ToolBarDateRunnerPolicy == null
                 || !options.Ui.ToolBarDateRunnerPolicy.EnablePolicyTransitionDebugLog)
@@ -135,7 +151,14 @@ namespace ZHSan.Core.Presentation.UI.Services
             {
                 this.lastTransitionSnapshot = currentSnapshot;
                 this.hasLoggedTransitionSnapshot = true;
-                return string.Format("[ToolBarDateRunnerPolicy][Transition] Initial snapshot observed ({0}).", reason ?? "unspecified");
+                return new ToolBarDateRunnerPolicyTransitionDiagnosticsSnapshot(
+                    reason,
+                    true,
+                    default,
+                    currentSnapshot,
+                    false,
+                    false,
+                    false);
             }
 
             if (this.lastTransitionSnapshot.Equals(currentSnapshot))
@@ -145,9 +168,29 @@ namespace ZHSan.Core.Presentation.UI.Services
 
             var previous = this.lastTransitionSnapshot;
             this.lastTransitionSnapshot = currentSnapshot;
+            return new ToolBarDateRunnerPolicyTransitionDiagnosticsSnapshot(
+                reason,
+                false,
+                previous,
+                currentSnapshot,
+                previous.Decision.SuspendDateRunner != currentSnapshot.Decision.SuspendDateRunner,
+                previous.Decision.LockToolBarInput != currentSnapshot.Decision.LockToolBarInput,
+                !previous.FlowPolicy.Equals(currentSnapshot.FlowPolicy));
+        }
+
+        public string BuildTransitionDiagnostics(ToolBarDateRunnerPolicyTransitionDiagnosticsSnapshot snapshot)
+        {
+            if (snapshot == null) return null;
+            if (snapshot.InitialSnapshot)
+            {
+                return string.Format("[ToolBarDateRunnerPolicy][Transition] Initial snapshot observed ({0}).", snapshot.Reason);
+            }
+
+            var previous = snapshot.PreviousSnapshot;
+            var currentSnapshot = snapshot.CurrentSnapshot;
             return string.Format(
                 "[ToolBarDateRunnerPolicy][Transition] {0}: SuspendDateRunner {1} -> {2}, LockToolBarInput {3} -> {4}, FlowPolicy(None/Selector/Map/Dialog) {5}/{6}/{7}/{8} -> {9}/{10}/{11}/{12}.",
-                reason ?? "state changed",
+                snapshot.Reason,
                 previous.Decision.SuspendDateRunner,
                 currentSnapshot.Decision.SuspendDateRunner,
                 previous.Decision.LockToolBarInput,
@@ -160,6 +203,11 @@ namespace ZHSan.Core.Presentation.UI.Services
                 currentSnapshot.FlowPolicy.LockInSelector,
                 currentSnapshot.FlowPolicy.LockInMapViewSelector,
                 currentSnapshot.FlowPolicy.LockInDialog);
+        }
+
+        public string TryBuildTransitionDiagnostics(ToolBarDateRunnerPolicySnapshot currentSnapshot, RuntimeOptions options, string reason)
+        {
+            return this.BuildTransitionDiagnostics(this.TryBuildTransitionDiagnosticsSnapshot(currentSnapshot, options, reason));
         }
     }
 

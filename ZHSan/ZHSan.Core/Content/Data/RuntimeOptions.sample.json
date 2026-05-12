@@ -11,6 +11,7 @@
       "cacheDiagnosticsLogMinIntervalMs": 5000,
       "enablePolicyTransitionDebugLog": false,
       "diagnosticsOverlayMaxMessages": 30,
+      "diagnosticsOverlayMaxVisibleLinesPerGroup": 6,
       "diagnosticsOverlayMinimumCategory": "Cache",
       "diagnosticsOverlayShowCacheGroupByDefault": true,
       "diagnosticsOverlayShowTransitionGroupByDefault": true,
@@ -26,6 +27,7 @@
     "debugOverlayToggleKey": "F10",
     "debugOverlayGroupToggleKey": "F11",
     "debugOverlayReloadKey": "F9",
-    "debugOverlayPresetCycleKey": "F8"
+    "debugOverlayPresetCycleKey": "F8",
+    "debugOverlayScrollGroupKey": "F7"
   }
 }
