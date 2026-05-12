@@ -1,0 +1,50 @@
+{
+  "ui": {
+    "uiScale": 1.0,
+    "toolBarDateRunnerPolicy": {
+      "inputDiagnosticsMinIntervalMs": 150,
+      "inputDiagnosticsEnableDedup": true,
+      "inputDiagnosticsTrendWindowSeconds": 10,
+      "inputDiagnosticsFirstSampleHintSeconds": 3
+    },
+    "tabListProfiles": {
+      "overrides": [
+        {
+          "frameKind": "Person",
+          "pageSize": 25,
+          "nameFilterMode": "prefix",
+          "statusFilterMode": "exact",
+          "sort": {
+            "columnId": "name",
+            "descending": false
+          },
+          "columns": [
+            {
+              "id": "name",
+              "title": "名称",
+              "width": 240,
+              "visible": true,
+              "numeric": false,
+              "smallToBig": true
+            },
+            {
+              "id": "status",
+              "title": "状态",
+              "width": 140,
+              "visible": true,
+              "numeric": false,
+              "smallToBig": true
+            }
+          ],
+          "frameFunction": "Browse"
+        },
+        {
+          "frameKind": "Treasure",
+          "pageSize": 20,
+          "nameFilterMode": "contains",
+          "statusFilterMode": "exact"
+        }
+      ]
+    }
+  }
+}

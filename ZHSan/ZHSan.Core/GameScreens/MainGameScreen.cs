@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using GameFreeText;
 using GameGlobal;
@@ -21,12 +22,23 @@ using WorldOfTheThreeKingdoms.GameScreens.ScreenLayers;
 using WorldOfTheThreeKingdoms.Resources;
 using Platforms;
 using GameManager;
+using ZHSan.Core.Infrastructure.Runtime;
+using ZHSan.Core.Infrastructure.FeatureFlags;
+using ZHSan.Core.Infrastructure.Configuration;
+using ZHSan.Core.Infrastructure.Logging;
+using ZHSan.Core.Application.Events;
+using ZHSan.Core.Presentation.UI.Adapters;
+using ZHSan.Core.Presentation.UI.Events;
+using ZHSan.Core.Presentation.UI.ViewModels;
+using ZHSan.Core.Presentation.UI.Services;
+using ZHSan.Core.Presentation.UI.TabList;
+using ZHSan.Core.Presentation.UI;
 
 //using GameObjects.PersonDetail.PersonMessages;
 
 namespace WorldOfTheThreeKingdoms.GameScreens
 {
-    public partial class MainGameScreen : Screen
+    public partial class MainGameScreen : Screen, IRuntimeOptionsReloadHandler
     {
         private string bianduiLiebiaoBiaoji;
         private ArchitectureLayer architectureLayer;
@@ -81,6 +93,50 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public DantiaoLayer dantiaoLayer = null;
 
+        private MyraUiRuntime myraUiRuntime;
+        private FeatureFlags featureFlags;
+        private UiThemeService uiThemeService;
+        private UiNavigationService uiNavigationService;
+        private UiDialogService uiDialogService;
+        private UiContextMenuService uiContextMenuService;
+        private TabListDescriptorService tabListDescriptorService;
+        private TabListQueryProfileProvider tabListQueryProfileProvider;
+        private ToolBarDateRunnerInteractionService toolBarDateRunnerInteractionService;
+        private RuntimeOptions runtimeOptions;
+        private ToolBarDateRunnerPolicyInputBuilder toolBarDateRunnerPolicyInputBuilder;
+        private ToolBarDateRunnerFlowPolicyBuilder toolBarDateRunnerFlowPolicyBuilder;
+        private ToolBarDateRunnerPolicyCoordinator toolBarDateRunnerPolicyCoordinator;
+        private IEventBus eventBus;
+        private RuntimeOptionsPersistenceService runtimeOptionsPersistenceService;
+        private RuntimeOptionsReloadCoordinator runtimeOptionsReloadCoordinator;
+        private ToolBarDateRunnerPolicyDebugOverlayAdapter toolBarDateRunnerPolicyDebugOverlayAdapter;
+        private TabListQueryDescriptor currentTabListQuery;
+        private UndoneWorkKind? lastPolicyUndoneWorkKind;
+        private bool? lastPolicyDialogShowing;
+        private bool? lastPolicyContextMenuShowing;
+        private bool? lastPolicyOptionDialogShowing;
+        private bool lastDebugOverlayToggleKeyDown;
+        private bool lastDebugOverlayGroupToggleKeyDown;
+        private bool lastDebugOverlayReloadKeyDown;
+        private bool lastDebugOverlayPresetCycleKeyDown;
+        private bool lastDebugOverlayScrollGroupKeyDown;
+        private Keys debugOverlayToggleKey = Keys.F10;
+        private Keys debugOverlayGroupToggleKey = Keys.F11;
+        private Keys debugOverlayReloadKey = Keys.F9;
+        private Keys debugOverlayPresetCycleKey = Keys.F8;
+        private Keys debugOverlayScrollGroupKey = Keys.F7;
+        private IDisposable runtimeOptionsReloadSubscription;
+        private bool runtimeOptionsSubscriptionAttached;
+        private int runtimeOptionsSubscriptionAttachCount;
+        private int runtimeOptionsSubscriptionDetachCount;
+        private int runtimeOptionsSubscriptionSkipDuplicateCount;
+        private string lastInputDiagnosticsSignature;
+        private DateTime lastInputDiagnosticsPublishedAtUtc = DateTime.MinValue;
+        private int suppressedInputDiagnosticsCount;
+        private readonly Queue<DateTime> inputSuppressedEventTimesUtc = new Queue<DateTime>();
+        private readonly Queue<DateTime> inputPublishedEventTimesUtc = new Queue<DateTime>();
+        private bool markNextInputDiagnosticsSampleAsFirstAfterTrendWindowReload;
+
         public MainGameScreen()
             : base()
         {
@@ -113,6 +169,29 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.UpdateCount = 0;
 
             this.screenManager = new ScreenManager();
+            this.myraUiRuntime = RuntimeBootstrap.Services?.Resolve<MyraUiRuntime>();
+            this.featureFlags = RuntimeBootstrap.Services?.Resolve<FeatureFlags>();
+            this.uiThemeService = RuntimeBootstrap.Services?.Resolve<UiThemeService>();
+            this.uiNavigationService = RuntimeBootstrap.Services?.Resolve<UiNavigationService>();
+            this.uiDialogService = RuntimeBootstrap.Services?.Resolve<UiDialogService>();
+            this.uiContextMenuService = RuntimeBootstrap.Services?.Resolve<UiContextMenuService>();
+            this.tabListDescriptorService = RuntimeBootstrap.Services?.Resolve<TabListDescriptorService>();
+            this.tabListQueryProfileProvider = RuntimeBootstrap.Services?.Resolve<TabListQueryProfileProvider>();
+            this.toolBarDateRunnerInteractionService = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerInteractionService>();
+            this.runtimeOptions = RuntimeBootstrap.Services?.Resolve<RuntimeOptions>();
+            this.toolBarDateRunnerPolicyInputBuilder = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerPolicyInputBuilder>();
+            this.toolBarDateRunnerFlowPolicyBuilder = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerFlowPolicyBuilder>();
+            this.toolBarDateRunnerPolicyCoordinator = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerPolicyCoordinator>();
+            this.eventBus = RuntimeBootstrap.Services?.Resolve<IEventBus>();
+            this.runtimeOptionsPersistenceService = RuntimeBootstrap.Services?.Resolve<RuntimeOptionsPersistenceService>();
+            this.runtimeOptionsReloadCoordinator = RuntimeBootstrap.Services?.Resolve<RuntimeOptionsReloadCoordinator>();
+            this.EnsureRuntimeOptionsReloadSubscription();
+            var toolBarPolicyDebugOverlay = RuntimeBootstrap.Services?.Resolve<ToolBarDateRunnerPolicyDebugOverlay>();
+            var uiStyleTokens = RuntimeBootstrap.Services?.Resolve<UiStyleTokens>();
+            this.toolBarDateRunnerPolicyDebugOverlayAdapter = new ToolBarDateRunnerPolicyDebugOverlayAdapter(toolBarPolicyDebugOverlay, this.runtimeOptions, uiStyleTokens);
+            this.myraUiRuntime?.Layers?.Register(UiLayer.Overlay, this.toolBarDateRunnerPolicyDebugOverlayAdapter);
+            this.ApplyDebugOverlayKeyBindingsFromOptions();
+            this.myraUiRuntime?.Initialize();
             
             //Session.Current.Scenario = new GameScenario(this);
             //this.LoadCommonData();
@@ -156,6 +235,11 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             //Platform.MainGame.Window.ClientSizeChanged -= this.Window_ClientSizeChanged;  // new EventHandler(this.Window_ClientSizeChanged);
             Platform.MainGame.Activated -= this.Game_Activated;  // new EventHandler(this.Game_Activated);
             Platform.MainGame.Deactivated -= this.Game_Deactivated;  // new EventHandler(this.Game_Deactivated);
+            this.runtimeOptionsReloadSubscription?.Dispose();
+            this.runtimeOptionsReloadSubscription = null;
+            this.runtimeOptionsSubscriptionAttached = false;
+            this.runtimeOptionsSubscriptionDetachCount++;
+            this.PublishSubscriptionHealthDiagnostics("Detach");
 
             this.mainMapLayer.DisplayingMapTiles = null;
             this.mainMapLayer.DisplayingTiles = null;
@@ -164,6 +248,41 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.routewayLayer = null;
             this.screenManager = null;
             this.Plugins = null;
+        }
+
+        private void EnsureRuntimeOptionsReloadSubscription()
+        {
+            if (this.runtimeOptionsSubscriptionAttached)
+            {
+                this.runtimeOptionsSubscriptionSkipDuplicateCount++;
+                this.PublishSubscriptionHealthDiagnostics("SkipDuplicate");
+                RuntimeLog.Info("[ToolBarDateRunnerPolicy] RuntimeOptions reload subscription already attached. Skip duplicate subscription.");
+                return;
+            }
+
+            this.runtimeOptionsReloadSubscription = this.runtimeOptionsReloadCoordinator?.RegisterHandler(this);
+            this.runtimeOptionsSubscriptionAttached = this.runtimeOptionsReloadSubscription != null;
+            if (this.runtimeOptionsSubscriptionAttached)
+            {
+                this.runtimeOptionsSubscriptionAttachCount++;
+                this.PublishSubscriptionHealthDiagnostics("Attach");
+            }
+        }
+
+        private void PublishSubscriptionHealthDiagnostics(string stage)
+        {
+            var message = string.Format(
+                "[ToolBarDateRunnerPolicy][Subscription] {0}. Attach={1}, Detach={2}, SkipDuplicate={3}.",
+                stage ?? "Unknown",
+                this.runtimeOptionsSubscriptionAttachCount,
+                this.runtimeOptionsSubscriptionDetachCount,
+                this.runtimeOptionsSubscriptionSkipDuplicateCount);
+            RuntimeLog.Info(message);
+            this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
+                "Subscription",
+                stage ?? "Unknown",
+                default,
+                message));
         }
 
 
@@ -193,6 +312,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             //Begin(SpriteSortMode.Deferred);
             //Begin(SpriteBlendMode.AlphaBlend, SpriteSortMode.BackToFront, SaveStateMode.None);
             this.Drawing(gameTime);
+            this.myraUiRuntime?.Draw();
             //End();
         }
 
@@ -227,6 +347,10 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public void DrawDialog()
         {
+            if (this.Plugins.HelpPlugin.IsShowing)
+            {
+                this.ShowHelpDialogByBridge(new HelpDialogViewModel { Position = ShowPosition.Center });
+            }
             this.Plugins.HelpPlugin.Draw();
             this.Plugins.OptionDialogPlugin.Draw();
             this.Plugins.SimpleTextDialogPlugin.Draw();
@@ -632,8 +756,8 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                         }
                         if (!Session.Current.Scenario.Factions.HasFactionInQueue(Session.Current.Scenario.PlayerFactions))
                         {
-                            this.Plugins.DateRunnerPlugin.Reset();
-                            this.Plugins.DateRunnerPlugin.RunDays(1);
+                            this.ResetDateRunner();
+                            this.RunDateRunnerDays(1);
                         }
                     }
                     if (Session.Current.Scenario.PlayerFactions.Count == 0)
@@ -924,7 +1048,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                             {
                                 person.OutsideDestination = new Point?(this.selectingLayer.SelectedPoint);
                             }
-                            this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetConvinceDestinationPerson, false, true, true, false, architectureByPosition.GetConvinceDestinationPersonList((this.CurrentPersons[0] as Person).BelongedFaction), null, "说服", "Personal");
+                            this.ShowPersonDetailTabList(FrameFunction.GetConvinceDestinationPerson, architectureByPosition.GetConvinceDestinationPersonList((this.CurrentPersons[0] as Person).BelongedFaction), null, "说服");
                         }
                     }
                     return;
@@ -940,7 +1064,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                             {
                                 person.OutsideDestination = new Point?(this.selectingLayer.SelectedPoint);
                             }
-                            this.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetAssassinatePersonTarget, false, true, true, false, architectureByPosition.GetAssassinatePersonTarget((this.CurrentPersons[0] as Person).BelongedFaction), null, "暗杀", "Personal");
+                            this.ShowPersonDetailTabList(FrameFunction.GetAssassinatePersonTarget, architectureByPosition.GetAssassinatePersonTarget((this.CurrentPersons[0] as Person).BelongedFaction), null, "暗杀");
                         }
                     }
                     return;
@@ -1661,8 +1785,12 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public override void SaveGame()
         {
-            this.Plugins.OptionDialogPlugin.SetStyle("SaveAndLoad");
-            this.Plugins.OptionDialogPlugin.SetTitle("存储进度");
+            var optionDialogViewModel = new OptionDialogViewModel
+            {
+                Style = "SaveAndLoad",
+                Title = "存储进度",
+                Position = ShowPosition.Center
+            };
             this.Plugins.OptionDialogPlugin.Clear();
 
             //throw new Exception("SaveGame");
@@ -1680,7 +1808,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.Plugins.OptionDialogPlugin.AddOption(saves[i].Summary, null, voidFunction);
             }
             this.Plugins.OptionDialogPlugin.EndAddOptions();
-            this.Plugins.OptionDialogPlugin.ShowOptionDialog(ShowPosition.Center);
+            this.ShowOptionDialogByBridge(optionDialogViewModel);
         }
 
         public void SaveGameToDisk(string LoadedFileName)
@@ -2009,17 +2137,42 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.Plugins.FactionTechniquesPlugin.IsShowing = true;
         }
 
+        private void PrepareTabListDescriptor(FrameKind kind, FrameFunction function, string title, string tabName)
+        {
+            if (this.tabListDescriptorService == null) return;
+            this.currentTabListQuery = this.tabListQueryProfileProvider?.CreateDefaultQuery(kind, function, this.tabListDescriptorService, title, tabName);
+            if (this.currentTabListQuery == null)
+            {
+                this.currentTabListQuery = this.tabListDescriptorService.CreateQuery(null);
+            }
+        }
+
+        private void ApplyTabListDescriptor(ref string title, ref string tabName)
+        {
+            if (this.currentTabListQuery == null) return;
+
+            foreach (var filter in this.currentTabListQuery.Filters)
+            {
+                if (filter.ColumnId == "status" && !string.IsNullOrWhiteSpace(filter.Keyword) && string.IsNullOrWhiteSpace(title))
+                {
+                    title = filter.Keyword;
+                }
+                else if (filter.ColumnId == "name" && !string.IsNullOrWhiteSpace(filter.Keyword) && string.IsNullOrWhiteSpace(tabName))
+                {
+                    tabName = filter.Keyword;
+                }
+            }
+        }
+
         public void ShowTabListInFrame(UndoneWorkKind undoneWork, FrameKind kind, FrameFunction function, bool OKEnabled, bool CancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName)
         {
+            this.PrepareTabListDescriptor(kind, function, title, tabName);
+            var effectiveTitle = title;
+            var effectiveTabName = tabName;
+            this.ApplyTabListDescriptor(ref effectiveTitle, ref effectiveTabName);
             if ((gameObjectList != null) && (gameObjectList.Count != 0))
             {
-                this.Plugins.GameFramePlugin.Kind = kind;
-                this.Plugins.GameFramePlugin.Function = function;
-                this.Plugins.TabListPlugin.InitialValues(gameObjectList, selectedObjectList, InputManager.NowMouse.ScrollWheelValue, title);
-                this.Plugins.TabListPlugin.SetListKindByName(kind.ToString(), showCheckBox, multiselecting);
-                this.Plugins.TabListPlugin.SetSelectedTab(tabName);
-                this.Plugins.GameFramePlugin.SetFrameContent(this.Plugins.TabListPlugin.TabList, base.viewportSizeFull);
-                
+                this.PrepareTabListFrame(kind, function, showCheckBox, multiselecting, gameObjectList, selectedObjectList, effectiveTitle, effectiveTabName);
                 this.Plugins.GameFramePlugin.OKButtonEnabled = OKEnabled;
                 this.Plugins.GameFramePlugin.CancelButtonEnabled = CancelEnabled;
                 this.Plugins.GameFramePlugin.IsShowing = true;
@@ -2028,20 +2181,113 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public void SetTabListInFrame(UndoneWorkKind undoneWork, FrameKind kind, FrameFunction function, bool OKEnabled, bool CancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName)
         {
+            this.PrepareTabListDescriptor(kind, function, title, tabName);
+            var effectiveTitle = title;
+            var effectiveTabName = tabName;
+            this.ApplyTabListDescriptor(ref effectiveTitle, ref effectiveTabName);
             if ((gameObjectList != null) && (gameObjectList.Count != 0))
             {
-                this.Plugins.GameFramePlugin.Kind = kind;
-                this.Plugins.GameFramePlugin.Function = function;
-                this.Plugins.TabListPlugin.InitialValues(gameObjectList, selectedObjectList, InputManager.NowMouse.ScrollWheelValue, title);
-                this.Plugins.TabListPlugin.SetListKindByName(kind.ToString(), showCheckBox, multiselecting);
-                this.Plugins.TabListPlugin.SetSelectedTab(tabName);
-                this.Plugins.GameFramePlugin.SetFrameContent(this.Plugins.TabListPlugin.TabList, base.viewportSizeFull);
+                this.PrepareTabListFrame(kind, function, showCheckBox, multiselecting, gameObjectList, selectedObjectList, effectiveTitle, effectiveTabName);
 
                 this.Plugins.GameFramePlugin.OKButtonEnabled = OKEnabled;
                 this.Plugins.GameFramePlugin.CancelButtonEnabled = CancelEnabled;
                 //this.Plugins.GameFramePlugin.IsShowing = true;
             }
         }
+
+
+        private readonly struct DetailTabListOptions
+        {
+            public DetailTabListOptions(bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting)
+            {
+                this.OkEnabled = okEnabled;
+                this.CancelEnabled = cancelEnabled;
+                this.ShowCheckBox = showCheckBox;
+                this.Multiselecting = multiselecting;
+            }
+
+            public bool OkEnabled { get; }
+            public bool CancelEnabled { get; }
+            public bool ShowCheckBox { get; }
+            public bool Multiselecting { get; }
+        }
+
+        private string ResolveDetailTabName(FrameKind kind, FrameFunction function, string tabName)
+        {
+            if (!string.IsNullOrWhiteSpace(tabName))
+            {
+                return tabName;
+            }
+
+            if (kind == FrameKind.Person)
+            {
+                return "Personal";
+            }
+
+            if (kind == FrameKind.Architecture && function == FrameFunction.GetTransferArchitecture)
+            {
+                return "运兵";
+            }
+
+            return string.Empty;
+        }
+
+        private void PrepareTabListFrame(FrameKind kind, FrameFunction function, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName)
+        {
+            this.Plugins.GameFramePlugin.Kind = kind;
+            this.Plugins.GameFramePlugin.Function = function;
+            this.Plugins.TabListPlugin.InitialValues(gameObjectList, selectedObjectList, InputManager.NowMouse.ScrollWheelValue, title);
+            this.Plugins.TabListPlugin.SetListKindByName(kind.ToString(), showCheckBox, multiselecting);
+            this.Plugins.TabListPlugin.SetSelectedTab(tabName);
+            if (this.Plugins.TabListPlugin is TabListPlugin.TabListPlugin concreteTabList)
+            {
+                concreteTabList.ApplyQueryDescriptor(this.currentTabListQuery);
+            }
+            this.Plugins.GameFramePlugin.SetFrameContent(this.Plugins.TabListPlugin.TabList, base.viewportSizeFull);
+        }
+
+        private void ShowDetailTabListByKind(FrameKind kind, FrameFunction function, DetailTabListOptions options, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string defaultTabName)
+        {
+            var effectiveTabName = this.ResolveDetailTabName(kind, function, defaultTabName);
+            this.ShowTabListInFrame(
+               UndoneWorkKind.Frame,
+               kind,
+               function,
+               options.OkEnabled,
+               options.CancelEnabled,
+               options.ShowCheckBox,
+               options.Multiselecting,
+               gameObjectList,
+               selectedObjectList,
+               title,
+               effectiveTabName);
+        }
+
+        internal void ShowPersonDetailTabList(FrameFunction function, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowPersonDetailTabList(function, false, true, true, false, gameObjectList, selectedObjectList, title, tabName);
+        }
+
+        internal void ShowPersonDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Person, function, new DetailTabListOptions(okEnabled, cancelEnabled, showCheckBox, multiselecting), gameObjectList, selectedObjectList, title, tabName);
+        }
+
+        internal void ShowTroopDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Troop, function, new DetailTabListOptions(okEnabled, cancelEnabled, showCheckBox, multiselecting), gameObjectList, selectedObjectList, title, tabName);
+        }
+
+        internal void ShowArchitectureDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Architecture, function, new DetailTabListOptions(okEnabled, cancelEnabled, showCheckBox, multiselecting), gameObjectList, selectedObjectList, title, tabName);
+        }
+
+        internal void ShowTreasureDetailTabList(FrameFunction function, bool okEnabled, bool cancelEnabled, bool showCheckBox, bool multiselecting, GameObjectList gameObjectList, GameObjectList selectedObjectList, string title, string tabName = "")
+        {
+            this.ShowDetailTabListByKind(FrameKind.Treasure, function, new DetailTabListOptions(okEnabled, cancelEnabled, showCheckBox, multiselecting), gameObjectList, selectedObjectList, title, tabName);
+        }
+
 
         public void ShowMapViewSelector(bool multiSelecting, GameObjectList gameObjectList, GameDelegates.VoidFunction function, MapViewSelectorKind mapViewSelectorKind)
         {
@@ -2299,7 +2545,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
 
 
-                            this.Plugins.ConfirmationDialogPlugin.IsShowing = true;
+                            this.ShowConfirmationDialogByBridge();
                         }
                     }
                     else
@@ -2677,7 +2923,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.Plugins.ConfirmationDialogPlugin.AddYesFunction(new GameDelegates.VoidFunction(this.DemolishCurrentRouteway));
                 this.Plugins.ConfirmationDialogPlugin.SetPosition(ShowPosition.Center);
                 this.Plugins.SimpleTextDialogPlugin.SetBranch("DemolishRouteway");
-                this.Plugins.ConfirmationDialogPlugin.IsShowing = true;
+                this.ShowConfirmationDialogByBridge();
             }
         }
 
@@ -2699,6 +2945,21 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             }            
         }
 
+        private void ShowHelpDialogByBridge(HelpDialogViewModel viewModel)
+        {
+            this.uiDialogService?.ShowHelp(this.Plugins.HelpPlugin, viewModel, this.uiThemeService, this.uiNavigationService);
+        }
+
+        private void ShowOptionDialogByBridge(OptionDialogViewModel viewModel)
+        {
+            this.uiDialogService?.ShowOption(this.Plugins.OptionDialogPlugin, viewModel);
+        }
+
+        private void ShowConfirmationDialogByBridge()
+        {
+            this.uiDialogService?.ShowConfirmation(this.Plugins.ConfirmationDialogPlugin, new ConfirmationDialogViewModel { Position = ShowPosition.Center });
+        }
+
         public override void TryToExit()
         {
             if (!this.Plugins.tupianwenziPlugin.IsShowing)
@@ -2708,7 +2969,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.Plugins.ConfirmationDialogPlugin.AddYesFunction(new GameDelegates.VoidFunction(this.saveBeforeExit));
                 this.Plugins.ConfirmationDialogPlugin.SetPosition(ShowPosition.Center);
                 this.Plugins.SimpleTextDialogPlugin.SetBranch(Session.GlobalVariables.HardcoreMode ? "ExitSaveGame" : (Session.Current.Scenario.JustSaved ? "ExitGameNoReminder" : "ExitGame"));
-                this.Plugins.ConfirmationDialogPlugin.IsShowing = true;
+                this.ShowConfirmationDialogByBridge();
             }
         }
 
@@ -2720,7 +2981,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
         {
             if ((this.viewMove == ViewMove.Stop) && !this.AfterDayPassed(gameTime))
             {
-                this.Plugins.DateRunnerPlugin.DateGo();
+                this.StartDateRunner();
                 if (!this.AfterDayStarting(gameTime))
                 {
                     if (Session.GlobalVariables.EnableResposiveThreading)
@@ -2729,10 +2990,50 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     }
                     else
                     {
-                        this.Plugins.DateRunnerPlugin.DateStop();
+                        this.StopDateRunner();
                     }
                 }
             }
+        }
+
+        private void StopDateRunner()
+        {
+            // C-3 批次 4：DateRunner 停止触发链路统一收口，避免分散调用。
+            this.Plugins.DateRunnerPlugin?.DateStop();
+        }
+
+        private bool CanAdvanceDateRunner()
+        {
+            if (this.featureFlags == null || !this.featureFlags.UseToolBarDateRunnerPolicy) return true;
+            var policy = this.ApplyToolBarDateRunnerPolicyBridge();
+            return policy.Decision.AllowDateRunnerProgress;
+        }
+
+        private void StartDateRunner()
+        {
+            if (!this.CanAdvanceDateRunner())
+            {
+                this.StopDateRunner();
+                return;
+            }
+
+            this.Plugins.DateRunnerPlugin?.DateGo();
+        }
+
+        private void ResetDateRunner()
+        {
+            this.Plugins.DateRunnerPlugin?.Reset();
+        }
+
+        private void RunDateRunnerDays(int days)
+        {
+            if (!this.CanAdvanceDateRunner())
+            {
+                this.StopDateRunner();
+                return;
+            }
+
+            this.Plugins.DateRunnerPlugin?.RunDays(days);
         }
 
         private void RunAI()
@@ -2753,6 +3054,14 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         public override void Update(GameTime gameTime)   //视野内容更新
         {
+            this.myraUiRuntime?.Update();
+            this.HandleDebugOverlayShortcutKeys();
+            var currentWheelValue = InputManager.NowMouse.ScrollWheelValue;
+            var wheelDelta = currentWheelValue - this.oldScrollWheelValue;
+            this.oldScrollWheelValue = currentWheelValue;
+            this.toolBarDateRunnerPolicyDebugOverlayAdapter?.HandleMouseWheelDelta(wheelDelta);
+            this.toolBarDateRunnerPolicyDebugOverlayAdapter?.Refresh();
+            this.toolBarDateRunnerPolicyDebugOverlayAdapter?.RefreshWidgetsIfNeeded();
             if (toggleScreen)
             {
                 toggleScreenTime += Convert.ToSingle(gameTime.ElapsedGameTime.TotalSeconds);
@@ -2839,18 +3148,39 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.CalculateFrameRate(gameTime);
                 this.Plugins.PersonBubblePlugin.Update(gameTime);
 
-                switch (base.UndoneWorks.Peek().Kind)
+                var currentUndoneWorkKind = base.UndoneWorks.Peek().Kind;
+                var hasUndoneWorkChanged = !this.lastPolicyUndoneWorkKind.HasValue || this.lastPolicyUndoneWorkKind.Value != currentUndoneWorkKind;
+                var hasPolicyUiStateChanged = this.HasPolicyRelevantUiStateChanged();
+                if (hasUndoneWorkChanged || hasPolicyUiStateChanged)
+                {
+                    var reason = hasUndoneWorkChanged ? "UndoneWorkKind changed" : "Policy-related UI visibility changed";
+                    if (hasUndoneWorkChanged && hasPolicyUiStateChanged)
+                    {
+                        reason = "UndoneWorkKind + Policy-related UI visibility changed";
+                    }
+
+                    this.TryLogToolBarPolicyCacheDiagnostics(reason);
+                    this.toolBarDateRunnerPolicyCoordinator?.InvalidateCache(reason);
+                    this.lastPolicyUndoneWorkKind = currentUndoneWorkKind;
+                }
+
+                var updateFlowPolicy = this.ApplyToolBarDateRunnerPolicyBridge();
+                switch (currentUndoneWorkKind)
                 {
                     case UndoneWorkKind.None:
 
-                        this.UpdateToolBar(gameTime);
+                        var toolBarPolicy = updateFlowPolicy;
+                        if (!toolBarPolicy.Decision.ShouldLockInputForFlow(ToolBarLockFlow.None, toolBarPolicy.FlowPolicy))
+                        {
+                            this.UpdateToolBar(gameTime);
+                            this.UpdateViewMove();
+                            this.HandleKey(gameTime);
+                        }
                         this.UpdateScreenBlind(gameTime);
                         //this.Plugins.youcelanPlugin.Update(gameTime);
                         //this.Plugins.youcelanPlugin.IsShowing = false;
-                        this.UpdateViewMove();
                         this.HandleLaterMouseEvent(gameTime);
                         this.ScrollTheMainMap(gameTime);
-                        this.HandleKey(gameTime);
 
                         if (Session.GlobalVariables.EnableResposiveThreading)
                         {
@@ -2867,7 +3197,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                                 if (roundDone)
                                 {
                                     roundDone = false;
-                                    this.Plugins.DateRunnerPlugin.DateStop();
+                                    this.StopDateRunner();
                                 }
                             }
                         }
@@ -2888,7 +3218,11 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                         break;
 
                     case UndoneWorkKind.Dialog:
-                        this.UpdateDialog(gameTime);
+                        var dialogPolicy = updateFlowPolicy;
+                        if (!dialogPolicy.Decision.ShouldLockInputForFlow(ToolBarLockFlow.Dialog, dialogPolicy.FlowPolicy))
+                        {
+                            this.UpdateDialog(gameTime);
+                        }
 
                         break;
                     case UndoneWorkKind.tupianwenzi:
@@ -2918,13 +3252,21 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                         break;
 
                     case UndoneWorkKind.Selector:
-                        this.HandleLaterMouseEvent(gameTime);
+                        var selectorPolicy = updateFlowPolicy;
+                        if (!selectorPolicy.Decision.ShouldLockInputForFlow(ToolBarLockFlow.Selector, selectorPolicy.FlowPolicy))
+                        {
+                            this.HandleLaterMouseEvent(gameTime);
+                        }
                         this.ScrollTheMainMap(gameTime);
                         break;
 
                     case UndoneWorkKind.MapViewSelector:
                         this.ResetCurrentStatus();
-                        this.UpdateViewMove();
+                        var mapSelectorPolicy = updateFlowPolicy;
+                        if (!mapSelectorPolicy.Decision.ShouldLockInputForFlow(ToolBarLockFlow.MapViewSelector, mapSelectorPolicy.FlowPolicy))
+                        {
+                            this.UpdateViewMove();
+                        }
                         this.HandleLaterMouseScroll();
                         this.ScrollTheMainMap(gameTime);
                         if (base.EnableLaterMouseEvent)
@@ -2950,6 +3292,358 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     this.mainMapLayer.freeTilesMemory();
                 }*/
 
+            }
+        }
+
+        private void HandleDebugOverlayShortcutKeys()
+        {
+            var state = Keyboard.GetState();
+            var toggleOverlayKeyDown = state.IsKeyDown(this.debugOverlayToggleKey);
+            if (toggleOverlayKeyDown && !this.lastDebugOverlayToggleKeyDown && this.runtimeOptions?.Debug != null)
+            {
+                this.runtimeOptions.Debug.ShowDebugOverlay = !this.runtimeOptions.Debug.ShowDebugOverlay;
+                this.PublishDebugOverlayInputDiagnostics(
+                    "Visibility",
+                    this.debugOverlayToggleKey,
+                    this.runtimeOptions.Debug.ShowDebugOverlay ? "ON" : "OFF",
+                    string.Empty,
+                    string.Format("[ToolBarDateRunnerPolicy] DebugOverlay visibility: {0}", this.runtimeOptions.Debug.ShowDebugOverlay ? "ON" : "OFF"));
+            }
+
+            this.lastDebugOverlayToggleKeyDown = toggleOverlayKeyDown;
+
+            var toggleGroupKeyDown = state.IsKeyDown(this.debugOverlayGroupToggleKey);
+            if (toggleGroupKeyDown && !this.lastDebugOverlayGroupToggleKeyDown)
+            {
+                var modeText = this.toolBarDateRunnerPolicyDebugOverlayAdapter?.ToggleGroupVisibility();
+                this.PublishDebugOverlayInputDiagnostics(
+                    "GroupVisibility",
+                    this.debugOverlayGroupToggleKey,
+                    string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText,
+                    string.Empty,
+                    string.Format("[ToolBarDateRunnerPolicy] DebugOverlay group mode switched ({0}): {1}.",
+                        this.debugOverlayGroupToggleKey,
+                        string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText));
+            }
+
+            this.lastDebugOverlayGroupToggleKeyDown = toggleGroupKeyDown;
+
+            var reloadKeyDown = state.IsKeyDown(this.debugOverlayReloadKey);
+            if (reloadKeyDown && !this.lastDebugOverlayReloadKeyDown)
+            {
+                this.ReloadRuntimeOptionsForDebugOverlay();
+            }
+
+            this.lastDebugOverlayReloadKeyDown = reloadKeyDown;
+
+            var presetCycleKeyDown = state.IsKeyDown(this.debugOverlayPresetCycleKey);
+            if (presetCycleKeyDown && !this.lastDebugOverlayPresetCycleKeyDown)
+            {
+                var preset = this.toolBarDateRunnerPolicyDebugOverlayAdapter?.CyclePreset();
+                if (this.runtimeOptions?.Ui?.ToolBarDateRunnerPolicy != null && !string.IsNullOrWhiteSpace(preset))
+                {
+                    this.runtimeOptions.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayPreset = preset;
+                    this.PersistRuntimeOptionsSnapshot();
+                }
+                this.PublishDebugOverlayInputDiagnostics(
+                    "Preset",
+                    this.debugOverlayPresetCycleKey,
+                    string.IsNullOrWhiteSpace(preset) ? "N/A" : preset,
+                    "Preset switch overrides group flags; manual group toggle applies as session-local override until next preset switch/reload.",
+                    string.Format("[ToolBarDateRunnerPolicy] DebugOverlay preset switched ({0}): {1}.",
+                        this.debugOverlayPresetCycleKey,
+                        string.IsNullOrWhiteSpace(preset) ? "N/A" : preset));
+                this.PublishDebugOverlayInputDiagnostics(
+                    "PresetPriority",
+                    this.debugOverlayPresetCycleKey,
+                    "SessionLocalOverride",
+                    "Preset switch overrides group flags; manual F11 group toggle applies as session-local override until next preset switch/reload.",
+                    "[ToolBarDateRunnerPolicy] Preset priority: preset switch overrides group flags; manual F11 group toggle applies as session-local override until next preset switch/reload.");
+            }
+
+            this.lastDebugOverlayPresetCycleKeyDown = presetCycleKeyDown;
+
+            var scrollGroupKeyDown = state.IsKeyDown(this.debugOverlayScrollGroupKey);
+            if (scrollGroupKeyDown && !this.lastDebugOverlayScrollGroupKeyDown)
+            {
+                var modeText = this.toolBarDateRunnerPolicyDebugOverlayAdapter?.CycleActiveScrollGroup();
+                this.PublishDebugOverlayInputDiagnostics(
+                    "ScrollFocus",
+                    this.debugOverlayScrollGroupKey,
+                    string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText,
+                    string.Empty,
+                    string.Format("[ToolBarDateRunnerPolicy] DebugOverlay scroll focus switched ({0}): {1}.",
+                        this.debugOverlayScrollGroupKey,
+                        string.IsNullOrWhiteSpace(modeText) ? "N/A" : modeText));
+            }
+
+            this.lastDebugOverlayScrollGroupKeyDown = scrollGroupKeyDown;
+        }
+
+
+        private void PublishDebugOverlayInputDiagnostics(string action, Keys key, string result, string detail, string message)
+        {
+            var nowUtc = DateTime.UtcNow;
+            var policy = this.runtimeOptions?.Ui?.ToolBarDateRunnerPolicy;
+            var signature = string.Format("{0}|{1}|{2}|{3}", action ?? string.Empty, key, result ?? string.Empty, detail ?? string.Empty);
+            var minIntervalMs = Math.Max(0, policy?.InputDiagnosticsMinIntervalMs ?? 150);
+            var enableDedup = policy?.InputDiagnosticsEnableDedup != false;
+            var elapsedMs = this.lastInputDiagnosticsPublishedAtUtc == DateTime.MinValue
+                ? double.MaxValue
+                : (nowUtc - this.lastInputDiagnosticsPublishedAtUtc).TotalMilliseconds;
+            var isDuplicate = enableDedup
+                && string.Equals(this.lastInputDiagnosticsSignature, signature, StringComparison.Ordinal)
+                && elapsedMs < minIntervalMs;
+            if (isDuplicate)
+            {
+                this.suppressedInputDiagnosticsCount++;
+                this.inputSuppressedEventTimesUtc.Enqueue(nowUtc);
+                return;
+            }
+
+            if (this.suppressedInputDiagnosticsCount > 0)
+            {
+                RuntimeLog.Info(string.Format(
+                    "[ToolBarDateRunnerPolicy] Input diagnostics dedupe suppressed {0} entries (Window={1}ms).",
+                    this.suppressedInputDiagnosticsCount,
+                    minIntervalMs));
+            }
+
+            RuntimeLog.Info(message ?? string.Empty);
+            var suppressedCount = this.suppressedInputDiagnosticsCount;
+            this.inputPublishedEventTimesUtc.Enqueue(nowUtc);
+            var trendWindowSeconds = Math.Max(1, policy?.InputDiagnosticsTrendWindowSeconds ?? 10);
+            var trendCutoffUtc = nowUtc.AddSeconds(-trendWindowSeconds);
+            this.TrimInputDiagnosticsTrendQueue(this.inputSuppressedEventTimesUtc, trendCutoffUtc);
+            this.TrimInputDiagnosticsTrendQueue(this.inputPublishedEventTimesUtc, trendCutoffUtc);
+            var snapshot = new ToolBarDateRunnerPolicyInputDiagnosticsSnapshot(
+                action,
+                key.ToString(),
+                result,
+                detail,
+                suppressedCount,
+                minIntervalMs,
+                enableDedup,
+                elapsedMs,
+                trendWindowSeconds,
+                this.inputSuppressedEventTimesUtc.Count,
+                this.inputPublishedEventTimesUtc.Count,
+                this.markNextInputDiagnosticsSampleAsFirstAfterTrendWindowReload);
+            this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
+                "Input",
+                snapshot.Action,
+                default,
+                message,
+                null,
+                null,
+                null,
+                null,
+                snapshot));
+            this.suppressedInputDiagnosticsCount = 0;
+            this.markNextInputDiagnosticsSampleAsFirstAfterTrendWindowReload = false;
+            this.lastInputDiagnosticsSignature = signature;
+            this.lastInputDiagnosticsPublishedAtUtc = nowUtc;
+        }
+
+        private void TrimInputDiagnosticsTrendQueue(Queue<DateTime> queue, DateTime cutoffUtc)
+        {
+            if (queue == null) return;
+            while (queue.Count > 0 && queue.Peek() < cutoffUtc)
+            {
+                queue.Dequeue();
+            }
+        }
+
+        private void ApplyDebugOverlayKeyBindingsFromOptions()
+        {
+            if (this.runtimeOptions?.Input == null) return;
+            Keys toggleKey;
+            if (Enum.TryParse(this.runtimeOptions.Input.DebugOverlayToggleKey, true, out toggleKey))
+            {
+                this.debugOverlayToggleKey = toggleKey;
+            }
+
+            Keys groupKey;
+            if (Enum.TryParse(this.runtimeOptions.Input.DebugOverlayGroupToggleKey, true, out groupKey))
+            {
+                this.debugOverlayGroupToggleKey = groupKey;
+            }
+            Keys reloadKey;
+            if (Enum.TryParse(this.runtimeOptions.Input.DebugOverlayReloadKey, true, out reloadKey))
+            {
+                this.debugOverlayReloadKey = reloadKey;
+            }
+            Keys presetCycleKey;
+            if (Enum.TryParse(this.runtimeOptions.Input.DebugOverlayPresetCycleKey, true, out presetCycleKey))
+            {
+                this.debugOverlayPresetCycleKey = presetCycleKey;
+            }
+            Keys scrollGroupKey;
+            if (Enum.TryParse(this.runtimeOptions.Input.DebugOverlayScrollGroupKey, true, out scrollGroupKey))
+            {
+                this.debugOverlayScrollGroupKey = scrollGroupKey;
+            }
+
+            this.debugOverlayGroupToggleKey = this.ResolveDebugOverlayKeyConflict(
+                "Group",
+                this.debugOverlayGroupToggleKey,
+                Keys.F11,
+                Keys.F6,
+                this.debugOverlayToggleKey);
+            this.debugOverlayReloadKey = this.ResolveDebugOverlayKeyConflict(
+                "Reload",
+                this.debugOverlayReloadKey,
+                Keys.F9,
+                Keys.F6,
+                this.debugOverlayToggleKey,
+                this.debugOverlayGroupToggleKey);
+            this.debugOverlayPresetCycleKey = this.ResolveDebugOverlayKeyConflict(
+                "Preset",
+                this.debugOverlayPresetCycleKey,
+                Keys.F8,
+                Keys.F6,
+                this.debugOverlayToggleKey,
+                this.debugOverlayGroupToggleKey,
+                this.debugOverlayReloadKey);
+            this.debugOverlayScrollGroupKey = this.ResolveDebugOverlayKeyConflict(
+                "ScrollGroup",
+                this.debugOverlayScrollGroupKey,
+                Keys.F7,
+                Keys.F6,
+                this.debugOverlayToggleKey,
+                this.debugOverlayGroupToggleKey,
+                this.debugOverlayReloadKey,
+                this.debugOverlayPresetCycleKey);
+        }
+
+
+        private Keys ResolveDebugOverlayKeyConflict(string keyName, Keys configuredKey, Keys fallbackKey, Keys secondaryFallbackKey, params Keys[] reservedKeys)
+        {
+            if (reservedKeys == null)
+            {
+                return configuredKey;
+            }
+
+            foreach (var reservedKey in reservedKeys)
+            {
+                if (configuredKey != reservedKey) continue;
+                var resolvedKey = fallbackKey;
+                foreach (var candidate in reservedKeys)
+                {
+                    if (resolvedKey == candidate)
+                    {
+                        resolvedKey = secondaryFallbackKey;
+                        break;
+                    }
+                }
+
+                this.PublishDebugOverlayInputDiagnostics(
+                    "KeyConflict",
+                    configuredKey,
+                    resolvedKey.ToString(),
+                    string.Format("{0} fallback", keyName ?? "Unknown"),
+                    string.Format(
+                        "[ToolBarDateRunnerPolicy] Debug overlay key conflict detected: {0} mapped to {1}. Fallback to {2}.",
+                        keyName ?? "Unknown",
+                        configuredKey,
+                        resolvedKey));
+                return resolvedKey;
+            }
+
+            return configuredKey;
+        }
+
+        private void ReloadRuntimeOptionsForDebugOverlay()
+        {
+            const string runtimeOptionsPath = @"Content\Data\RuntimeOptions.json";
+            if (!File.Exists(runtimeOptionsPath))
+            {
+                RuntimeLog.Info(string.Format("[ToolBarDateRunnerPolicy] RuntimeOptions reload skipped: file not found ({0}).", runtimeOptionsPath));
+                return;
+            }
+
+            var reloaded = RuntimeOptionsLoader.LoadOrDefault(runtimeOptionsPath, RuntimeLog.Info);
+            if (reloaded == null)
+            {
+                RuntimeLog.Info("[ToolBarDateRunnerPolicy] RuntimeOptions reload failed: loader returned null.");
+                return;
+            }
+            this.eventBus?.Publish(new RuntimeOptionsReloadedEvent(reloaded, "DebugOverlayHotKey"));
+        }
+
+        private void PersistRuntimeOptionsSnapshot()
+        {
+            const string runtimeOptionsPath = @"Content\Data\RuntimeOptions.json";
+            if (this.runtimeOptionsPersistenceService != null)
+            {
+                this.runtimeOptionsPersistenceService.TryPersist(this.runtimeOptions, runtimeOptionsPath);
+                return;
+            }
+
+            RuntimeLog.Info("[ToolBarDateRunnerPolicy] RuntimeOptions persistence service unavailable. Keep in-memory preset only.");
+        }
+
+        public void ApplyRuntimeOptions(RuntimeOptions options, string source)
+        {
+            if (options == null)
+            {
+                return;
+            }
+
+            var previousPolicy = this.runtimeOptions?.Ui?.ToolBarDateRunnerPolicy;
+            var previousTrendWindowSeconds = Math.Max(1, previousPolicy?.InputDiagnosticsTrendWindowSeconds ?? 10);
+            var previousMinIntervalMs = Math.Max(0, previousPolicy?.InputDiagnosticsMinIntervalMs ?? 150);
+            var previousDedupEnabled = previousPolicy?.InputDiagnosticsEnableDedup != false;
+            var previousFirstSampleHintSeconds = Math.Max(1, previousPolicy?.InputDiagnosticsFirstSampleHintSeconds ?? 3);
+            this.runtimeOptions = options;
+            var currentPolicy = this.runtimeOptions?.Ui?.ToolBarDateRunnerPolicy;
+            var currentTrendWindowSeconds = Math.Max(1, currentPolicy?.InputDiagnosticsTrendWindowSeconds ?? 10);
+            var currentMinIntervalMs = Math.Max(0, currentPolicy?.InputDiagnosticsMinIntervalMs ?? 150);
+            var currentDedupEnabled = currentPolicy?.InputDiagnosticsEnableDedup != false;
+            var currentFirstSampleHintSeconds = Math.Max(1, currentPolicy?.InputDiagnosticsFirstSampleHintSeconds ?? 3);
+            this.ApplyDebugOverlayKeyBindingsFromOptions();
+            this.toolBarDateRunnerPolicyDebugOverlayAdapter?.UpdateRuntimeOptions(this.runtimeOptions);
+            var reloadReason = string.Format("RuntimeOptions reloaded from {0}", string.IsNullOrWhiteSpace(source) ? "unknown" : source);
+            this.TryLogToolBarPolicyCacheDiagnostics(reloadReason);
+            this.ApplyToolBarDateRunnerPolicyBridge(reloadReason);
+            RuntimeLog.Info(string.Format(
+                "[ToolBarDateRunnerPolicy] RuntimeOptions reloaded from {0}. Toggle={1}, Group={2}, Reload={3}, Preset={4}, ScrollGroup={5}.",
+                string.IsNullOrWhiteSpace(source) ? "unknown" : source,
+                this.debugOverlayToggleKey,
+                this.debugOverlayGroupToggleKey,
+                this.debugOverlayReloadKey,
+                this.debugOverlayPresetCycleKey,
+                this.debugOverlayScrollGroupKey));
+
+            var changedItems = new List<string>();
+            if (previousMinIntervalMs != currentMinIntervalMs)
+            {
+                changedItems.Add(string.Format("MinIntervalMs:{0}->{1}", previousMinIntervalMs, currentMinIntervalMs));
+            }
+            if (previousDedupEnabled != currentDedupEnabled)
+            {
+                changedItems.Add(string.Format("Dedup:{0}->{1}", previousDedupEnabled ? "ON" : "OFF", currentDedupEnabled ? "ON" : "OFF"));
+            }
+            if (previousTrendWindowSeconds != currentTrendWindowSeconds)
+            {
+                changedItems.Add(string.Format("TrendWindowSeconds:{0}->{1}", previousTrendWindowSeconds, currentTrendWindowSeconds));
+                this.markNextInputDiagnosticsSampleAsFirstAfterTrendWindowReload = true;
+            }
+            if (previousFirstSampleHintSeconds != currentFirstSampleHintSeconds)
+            {
+                changedItems.Add(string.Format("FirstSampleHintSeconds:{0}->{1}", previousFirstSampleHintSeconds, currentFirstSampleHintSeconds));
+            }
+
+            if (changedItems.Count > 0)
+            {
+                var sourceText = string.IsNullOrWhiteSpace(source) ? "unknown" : source;
+                var summary = string.Join(", ", changedItems.ToArray());
+                this.PublishDebugOverlayInputDiagnostics(
+                    "InputDiagnosticsReloadSummary",
+                    this.debugOverlayReloadKey,
+                    "Changed",
+                    string.Format("Source={0}; {1}", sourceText, summary),
+                    string.Format("[ToolBarDateRunnerPolicy] Input diagnostics options reloaded: {0}.", summary));
             }
         }
 
@@ -3153,6 +3847,89 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                     this.Plugins.TroopSurveyPlugin.Showing = false;
                 }
             }
+        }
+
+
+        private bool HasPolicyRelevantUiStateChanged()
+        {
+            var dialogShowing = this.Plugins.HelpPlugin != null && this.Plugins.HelpPlugin.IsShowing;
+            var contextMenuShowing = this.Plugins.ContextMenuPlugin != null && this.Plugins.ContextMenuPlugin.IsShowing;
+            var optionDialog = this.Plugins.OptionDialogPlugin as OptionDialogPlugin.OptionDialogPlugin;
+            var optionShowing = optionDialog != null && optionDialog.IsShowing;
+
+            var changed = !this.lastPolicyDialogShowing.HasValue
+                || this.lastPolicyDialogShowing.Value != dialogShowing
+                || !this.lastPolicyContextMenuShowing.HasValue
+                || this.lastPolicyContextMenuShowing.Value != contextMenuShowing
+                || !this.lastPolicyOptionDialogShowing.HasValue
+                || this.lastPolicyOptionDialogShowing.Value != optionShowing;
+
+            this.lastPolicyDialogShowing = dialogShowing;
+            this.lastPolicyContextMenuShowing = contextMenuShowing;
+            this.lastPolicyOptionDialogShowing = optionShowing;
+            return changed;
+        }
+
+        private void TryLogToolBarPolicyCacheDiagnostics(string reason)
+        {
+            if (this.featureFlags == null || !this.featureFlags.UseToolBarDateRunnerPolicy || this.toolBarDateRunnerPolicyCoordinator == null)
+            {
+                return;
+            }
+
+            if (!this.toolBarDateRunnerPolicyCoordinator.ShouldLogCacheDiagnostics(this.runtimeOptions))
+            {
+                return;
+            }
+
+            var cacheSnapshot = this.toolBarDateRunnerPolicyCoordinator.BuildCacheDiagnosticsSnapshot(reason);
+            var diagnostics = this.toolBarDateRunnerPolicyCoordinator.BuildCacheDiagnostics(reason);
+            RuntimeLog.Info(diagnostics);
+            this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
+                "Cache",
+                reason,
+                default,
+                diagnostics,
+                null,
+                cacheSnapshot,
+                null,
+                null));
+        }
+
+        private ToolBarDateRunnerPolicySnapshot ApplyToolBarDateRunnerPolicyBridge(string reason = null)
+        {
+            if (this.toolBarDateRunnerPolicyCoordinator == null)
+            {
+                return default;
+            }
+
+            var snapshot = this.toolBarDateRunnerPolicyCoordinator.Evaluate(this, this.runtimeOptions, this.featureFlags);
+            var transitionReason = string.IsNullOrWhiteSpace(reason) ? this.UndoneWorks.Peek().Kind.ToString() : reason;
+            var transitionSnapshot = this.toolBarDateRunnerPolicyCoordinator.TryBuildTransitionDiagnosticsSnapshot(
+                snapshot,
+                this.runtimeOptions,
+                transitionReason);
+            var transitionDiagnostics = this.toolBarDateRunnerPolicyCoordinator.BuildTransitionDiagnostics(transitionSnapshot);
+            if (!string.IsNullOrWhiteSpace(transitionDiagnostics))
+            {
+                RuntimeLog.Info(transitionDiagnostics);
+                this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
+                    "Transition",
+                    transitionReason,
+                    snapshot,
+                    transitionDiagnostics,
+                    null,
+                    null,
+                    transitionSnapshot,
+                    null));
+            }
+
+            if (snapshot.Decision.SuspendDateRunner)
+            {
+                this.StopDateRunner();
+            }
+
+            return snapshot;
         }
 
         private void UpdateToolBar(GameTime gameTime)
@@ -3657,7 +4434,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             this.Plugins.ConfirmationDialogPlugin.AddYesFunction(new GameDelegates.VoidFunction(this.ReturnToMainMenu));
             this.Plugins.ConfirmationDialogPlugin.SetPosition(ShowPosition.Center);
             this.Plugins.SimpleTextDialogPlugin.SetBranch("退回初始");
-            this.Plugins.ConfirmationDialogPlugin.IsShowing = true;
+            this.ShowConfirmationDialogByBridge();
         }
 
         public void ReturnToMainMenu()
@@ -3688,10 +4465,8 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             {
                 if (!(this.Plugins.ContextMenuPlugin.IsShowing || !Session.Current.Scenario.CurrentPlayer.Controlling))
                 {
-                    this.Plugins.ContextMenuPlugin.IsShowing = true;
-                    this.Plugins.ContextMenuPlugin.SetCurrentGameObject(this);
-                    this.Plugins.ContextMenuPlugin.SetMenuKindByName("ArchitectureTroopLeftClick");
-                    this.Plugins.ContextMenuPlugin.Prepare(this.SelectorStartPosition.X, this.SelectorStartPosition.Y, base.viewportSize);
+                    this.uiContextMenuService?.OpenArchitectureTroopLeftClick(this.Plugins.ContextMenuPlugin, this,
+                        this.SelectorStartPosition, base.viewportSize);
                     this.bianduiLiebiaoBiaoji = "ArchitectureTroopLeftClick";
                 }
             }
@@ -3699,10 +4474,8 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             {
                 if (!this.Plugins.ContextMenuPlugin.IsShowing && Session.Current.Scenario.IsPlayerControlling())
                 {
-                    this.Plugins.ContextMenuPlugin.IsShowing = true;
-                    this.Plugins.ContextMenuPlugin.SetCurrentGameObject(this.CurrentTroop);
-                    this.Plugins.ContextMenuPlugin.SetMenuKindByName("TroopLeftClick");
-                    this.Plugins.ContextMenuPlugin.Prepare(this.SelectorStartPosition.X, this.SelectorStartPosition.Y, base.viewportSize);
+                    this.uiContextMenuService?.OpenTroopLeftClick(this.Plugins.ContextMenuPlugin, this.CurrentTroop,
+                        this.SelectorStartPosition, base.viewportSize);
                     this.bianduiLiebiaoBiaoji = "TroopLeftClick";
                     if (!this.Plugins.ContextMenuPlugin.IsShowing && (this.CurrentTroop.CutRoutewayDays > 0))
                     {
@@ -3716,10 +4489,8 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             }
             else if (((this.CurrentArchitecture != null) && (this.CurrentArchitecture.BelongedFaction == Session.Current.Scenario.CurrentPlayer)) && !(this.Plugins.ContextMenuPlugin.IsShowing || !Session.Current.Scenario.IsPlayerControlling()))
             {
-                this.Plugins.ContextMenuPlugin.IsShowing = true;
-                this.Plugins.ContextMenuPlugin.SetCurrentGameObject(this.CurrentArchitecture);
-                this.Plugins.ContextMenuPlugin.SetMenuKindByName("ArchitectureLeftClick");
-                this.Plugins.ContextMenuPlugin.Prepare(this.SelectorStartPosition.X, this.SelectorStartPosition.Y, base.viewportSize);
+                this.uiContextMenuService?.OpenArchitectureLeftClick(this.Plugins.ContextMenuPlugin, this.CurrentArchitecture,
+                    this.SelectorStartPosition, base.viewportSize);
 
                 this.bianduiLiebiaoBiaoji = "ArchitectureLeftClick";
                 this.ShowBianduiLiebiao(UndoneWorkKind.None, FrameKind.Military, FrameFunction.Browse, false, true, false, true,

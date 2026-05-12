@@ -1,0 +1,33 @@
+{
+  "ui": {
+    "toolBarDateRunnerPolicy": {
+      "lockInNoneFlow": true,
+      "lockInMapViewSelector": true,
+      "lockInSelector": true,
+      "lockInDialog": true,
+      "suspendOnOptionDialog": true,
+      "enableCacheDiagnosticsLog": true,
+      "cacheDiagnosticsLogSampleEveryInvalidations": 20,
+      "cacheDiagnosticsLogMinIntervalMs": 5000,
+      "enablePolicyTransitionDebugLog": false,
+      "diagnosticsOverlayMaxMessages": 30,
+      "diagnosticsOverlayMaxVisibleLinesPerGroup": 6,
+      "diagnosticsOverlayMinimumCategory": "Cache",
+      "diagnosticsOverlayShowCacheGroupByDefault": true,
+      "diagnosticsOverlayShowTransitionGroupByDefault": true,
+      "diagnosticsOverlayShowMiscGroupByDefault": true,
+      "diagnosticsOverlayPreset": "Debug",
+      "diagnosticsOverlayPersistenceRetryEnabled": true,
+      "diagnosticsOverlayPersistenceRetryCount": 1,
+      "diagnosticsOverlayPersistenceAlertThreshold": 1,
+      "diagnosticsOverlayPersistenceAlertQuietWindowMs": 0
+    }
+  },
+  "input": {
+    "debugOverlayToggleKey": "F10",
+    "debugOverlayGroupToggleKey": "F11",
+    "debugOverlayReloadKey": "F9",
+    "debugOverlayPresetCycleKey": "F8",
+    "debugOverlayScrollGroupKey": "F7"
+  }
+}

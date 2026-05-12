@@ -161,7 +161,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 Treasure currentGameObject = this.CurrentGameObject as Treasure;
                 if (currentGameObject.BelongedPerson != null)
                 {
-                    Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetAwardTreasurePerson, false, true, true, false, this.CurrentArchitecture.BelongedFaction.PersonsInArchitecturesExceptLeader, null, "", "");
+                    Session.MainGame.mainGameScreen.ShowPersonDetailTabList(FrameFunction.GetAwardTreasurePerson, this.CurrentArchitecture.BelongedFaction.PersonsInArchitecturesExceptLeader, null, "", "");
                 }
             }
         }
@@ -278,7 +278,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             if (selectedList != null && (selectedList.Count == 1))
             {
                 this.CurrentDiplomaticRelationDisplay = selectedList[0] as DiplomaticRelationDisplay;
-                Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetEnhanceDiplomaticRelationPerson, true, true, true, true, this.CurrentArchitecture.PersonsExcludeNvGuan, null, "外交人员", "Ability");
+                Session.MainGame.mainGameScreen.ShowPersonDetailTabList(FrameFunction.GetEnhanceDiplomaticRelationPerson, true, true, true, true, this.CurrentArchitecture.PersonsExcludeNvGuan, null, "外交人员", "Ability");
             }
         }
 
@@ -289,7 +289,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             if (selectedList != null && (selectedList.Count == 1))
             {
                 this.CurrentDiplomaticRelationDisplay = selectedList[0] as DiplomaticRelationDisplay;
-                Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetTruceDiplomaticRelationPerson, true, true, true, true, this.CurrentArchitecture.PersonsExcludeNvGuan, null, "外交人员", "Ability");
+                Session.MainGame.mainGameScreen.ShowPersonDetailTabList(FrameFunction.GetTruceDiplomaticRelationPerson, true, true, true, true, this.CurrentArchitecture.PersonsExcludeNvGuan, null, "外交人员", "Ability");
             }
         }
 
@@ -300,7 +300,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             if (selectedList != null && (selectedList.Count == 1))
             {
                 this.CurrentDiplomaticRelationDisplay = selectedList[0] as DiplomaticRelationDisplay;
-                Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetQuanXiangDiplomaticRelationPerson, false, true, true, false, this.CurrentArchitecture.PersonsExcludeNvGuan, null, "外交人员", "Ability");
+                Session.MainGame.mainGameScreen.ShowPersonDetailTabList(FrameFunction.GetQuanXiangDiplomaticRelationPerson, false, true, true, false, this.CurrentArchitecture.PersonsExcludeNvGuan, null, "外交人员", "Ability");
             }
         }
 
@@ -330,7 +330,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.CurrentDiplomaticRelationDisplay = selectedList[0] as DiplomaticRelationDisplay;
                 //this.CurrentDiplomaticRelationDisplay.Relation = 301;
                 //this.mainGameScreen.xianshishijiantupian(this.CurrentArchitecture.BelongedFaction.Leader, this.CurrentArchitecture.BelongedFaction.Leader.Name, "AllyDiplomaticRelation", "AllyDiplomaticRelation.jpg", "AllyDiplomaticRelation", this.CurrentDiplomaticRelationDisplay.FactionName, true);
-                Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.GetAllyDiplomaticRelationPerson, true, true, true, true, this.CurrentArchitecture.Persons, null, "外交人员", "Ability");
+                Session.MainGame.mainGameScreen.ShowPersonDetailTabList(FrameFunction.GetAllyDiplomaticRelationPerson, true, true, true, true, this.CurrentArchitecture.Persons, null, "外交人员", "Ability");
             }
         }
 
@@ -540,7 +540,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             if ((selectedList != null) && (selectedList.Count == 1))
             {
                 this.CurrentPerson = selectedList[0] as Person;
-                Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.SelectMarryTo, false, true, true, false, this.CurrentPerson.MakeMarryable(true), null, "选择对象", "");
+                Session.MainGame.mainGameScreen.ShowPersonDetailTabList(FrameFunction.SelectMarryTo, false, true, true, false, this.CurrentPerson.MakeMarryable(true), null, "选择对象", "");
             }
         }
 
@@ -550,7 +550,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
             if ((selectedList != null) && (selectedList.Count == 1))
             {
                 this.CurrentPerson = selectedList[0] as Person;
-                Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Person, FrameFunction.SelectMarryTo, false, true, true, false, this.CurrentPerson.MakeMarryable2(true), null, "选择纳妾对象", "");
+                Session.MainGame.mainGameScreen.ShowPersonDetailTabList(FrameFunction.SelectMarryTo, false, true, true, false, this.CurrentPerson.MakeMarryable2(true), null, "选择纳妾对象", "");
             }
         }
         private void FrameFunction_Architecture_AfterSelectMarryTo()
@@ -741,7 +741,7 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
                     //this.CurrentArchitecture.RemoveMilitary(m);
                     this.CurrentMilitaries = this.CurrentGameObjects.GetList();
-                    Session.MainGame.mainGameScreen.ShowTabListInFrame(UndoneWorkKind.Frame, FrameKind.Architecture, FrameFunction.GetTransferArchitecture, false, true, true, false, this.CurrentArchitecture.BelongedFaction .ArchitecturesExcluding(this.CurrentArchitecture), null, "运兵", "运兵");
+                    Session.MainGame.mainGameScreen.ShowArchitectureDetailTabList(FrameFunction.GetTransferArchitecture, false, true, true, false, this.CurrentArchitecture.BelongedFaction.ArchitecturesExcluding(this.CurrentArchitecture), null, "运兵", "运兵");
                     //this.mainGameScreen.PushUndoneWork(new UndoneWorkItem(UndoneWorkKind.Selecting, SelectingUndoneWorkKind.MilitaryTransfer));
 
 
