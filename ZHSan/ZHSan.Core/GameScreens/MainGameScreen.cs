@@ -130,6 +130,12 @@ namespace WorldOfTheThreeKingdoms.GameScreens
         private int runtimeOptionsSubscriptionAttachCount;
         private int runtimeOptionsSubscriptionDetachCount;
         private int runtimeOptionsSubscriptionSkipDuplicateCount;
+        private string lastInputDiagnosticsSignature;
+        private DateTime lastInputDiagnosticsPublishedAtUtc = DateTime.MinValue;
+        private int suppressedInputDiagnosticsCount;
+        private readonly Queue<DateTime> inputSuppressedEventTimesUtc = new Queue<DateTime>();
+        private readonly Queue<DateTime> inputPublishedEventTimesUtc = new Queue<DateTime>();
+        private bool markNextInputDiagnosticsSampleAsFirstAfterTrendWindowReload;
 
         public MainGameScreen()
             : base()
@@ -3377,12 +3383,52 @@ namespace WorldOfTheThreeKingdoms.GameScreens
 
         private void PublishDebugOverlayInputDiagnostics(string action, Keys key, string result, string detail, string message)
         {
+            var nowUtc = DateTime.UtcNow;
+            var policy = this.runtimeOptions?.Ui?.ToolBarDateRunnerPolicy;
+            var signature = string.Format("{0}|{1}|{2}|{3}", action ?? string.Empty, key, result ?? string.Empty, detail ?? string.Empty);
+            var minIntervalMs = Math.Max(0, policy?.InputDiagnosticsMinIntervalMs ?? 150);
+            var enableDedup = policy?.InputDiagnosticsEnableDedup != false;
+            var elapsedMs = this.lastInputDiagnosticsPublishedAtUtc == DateTime.MinValue
+                ? double.MaxValue
+                : (nowUtc - this.lastInputDiagnosticsPublishedAtUtc).TotalMilliseconds;
+            var isDuplicate = enableDedup
+                && string.Equals(this.lastInputDiagnosticsSignature, signature, StringComparison.Ordinal)
+                && elapsedMs < minIntervalMs;
+            if (isDuplicate)
+            {
+                this.suppressedInputDiagnosticsCount++;
+                this.inputSuppressedEventTimesUtc.Enqueue(nowUtc);
+                return;
+            }
+
+            if (this.suppressedInputDiagnosticsCount > 0)
+            {
+                RuntimeLog.Info(string.Format(
+                    "[ToolBarDateRunnerPolicy] Input diagnostics dedupe suppressed {0} entries (Window={1}ms).",
+                    this.suppressedInputDiagnosticsCount,
+                    minIntervalMs));
+            }
+
             RuntimeLog.Info(message ?? string.Empty);
+            var suppressedCount = this.suppressedInputDiagnosticsCount;
+            this.inputPublishedEventTimesUtc.Enqueue(nowUtc);
+            var trendWindowSeconds = Math.Max(1, policy?.InputDiagnosticsTrendWindowSeconds ?? 10);
+            var trendCutoffUtc = nowUtc.AddSeconds(-trendWindowSeconds);
+            this.TrimInputDiagnosticsTrendQueue(this.inputSuppressedEventTimesUtc, trendCutoffUtc);
+            this.TrimInputDiagnosticsTrendQueue(this.inputPublishedEventTimesUtc, trendCutoffUtc);
             var snapshot = new ToolBarDateRunnerPolicyInputDiagnosticsSnapshot(
                 action,
                 key.ToString(),
                 result,
-                detail);
+                detail,
+                suppressedCount,
+                minIntervalMs,
+                enableDedup,
+                elapsedMs,
+                trendWindowSeconds,
+                this.inputSuppressedEventTimesUtc.Count,
+                this.inputPublishedEventTimesUtc.Count,
+                this.markNextInputDiagnosticsSampleAsFirstAfterTrendWindowReload);
             this.eventBus?.Publish(new ToolBarDateRunnerPolicyDiagnosticsEvent(
                 "Input",
                 snapshot.Action,
@@ -3393,6 +3439,19 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 null,
                 null,
                 snapshot));
+            this.suppressedInputDiagnosticsCount = 0;
+            this.markNextInputDiagnosticsSampleAsFirstAfterTrendWindowReload = false;
+            this.lastInputDiagnosticsSignature = signature;
+            this.lastInputDiagnosticsPublishedAtUtc = nowUtc;
+        }
+
+        private void TrimInputDiagnosticsTrendQueue(Queue<DateTime> queue, DateTime cutoffUtc)
+        {
+            if (queue == null) return;
+            while (queue.Count > 0 && queue.Peek() < cutoffUtc)
+            {
+                queue.Dequeue();
+            }
         }
 
         private void ApplyDebugOverlayKeyBindingsFromOptions()
@@ -3531,7 +3590,17 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 return;
             }
 
+            var previousPolicy = this.runtimeOptions?.Ui?.ToolBarDateRunnerPolicy;
+            var previousTrendWindowSeconds = Math.Max(1, previousPolicy?.InputDiagnosticsTrendWindowSeconds ?? 10);
+            var previousMinIntervalMs = Math.Max(0, previousPolicy?.InputDiagnosticsMinIntervalMs ?? 150);
+            var previousDedupEnabled = previousPolicy?.InputDiagnosticsEnableDedup != false;
+            var previousFirstSampleHintSeconds = Math.Max(1, previousPolicy?.InputDiagnosticsFirstSampleHintSeconds ?? 3);
             this.runtimeOptions = options;
+            var currentPolicy = this.runtimeOptions?.Ui?.ToolBarDateRunnerPolicy;
+            var currentTrendWindowSeconds = Math.Max(1, currentPolicy?.InputDiagnosticsTrendWindowSeconds ?? 10);
+            var currentMinIntervalMs = Math.Max(0, currentPolicy?.InputDiagnosticsMinIntervalMs ?? 150);
+            var currentDedupEnabled = currentPolicy?.InputDiagnosticsEnableDedup != false;
+            var currentFirstSampleHintSeconds = Math.Max(1, currentPolicy?.InputDiagnosticsFirstSampleHintSeconds ?? 3);
             this.ApplyDebugOverlayKeyBindingsFromOptions();
             this.toolBarDateRunnerPolicyDebugOverlayAdapter?.UpdateRuntimeOptions(this.runtimeOptions);
             var reloadReason = string.Format("RuntimeOptions reloaded from {0}", string.IsNullOrWhiteSpace(source) ? "unknown" : source);
@@ -3545,6 +3614,37 @@ namespace WorldOfTheThreeKingdoms.GameScreens
                 this.debugOverlayReloadKey,
                 this.debugOverlayPresetCycleKey,
                 this.debugOverlayScrollGroupKey));
+
+            var changedItems = new List<string>();
+            if (previousMinIntervalMs != currentMinIntervalMs)
+            {
+                changedItems.Add(string.Format("MinIntervalMs:{0}->{1}", previousMinIntervalMs, currentMinIntervalMs));
+            }
+            if (previousDedupEnabled != currentDedupEnabled)
+            {
+                changedItems.Add(string.Format("Dedup:{0}->{1}", previousDedupEnabled ? "ON" : "OFF", currentDedupEnabled ? "ON" : "OFF"));
+            }
+            if (previousTrendWindowSeconds != currentTrendWindowSeconds)
+            {
+                changedItems.Add(string.Format("TrendWindowSeconds:{0}->{1}", previousTrendWindowSeconds, currentTrendWindowSeconds));
+                this.markNextInputDiagnosticsSampleAsFirstAfterTrendWindowReload = true;
+            }
+            if (previousFirstSampleHintSeconds != currentFirstSampleHintSeconds)
+            {
+                changedItems.Add(string.Format("FirstSampleHintSeconds:{0}->{1}", previousFirstSampleHintSeconds, currentFirstSampleHintSeconds));
+            }
+
+            if (changedItems.Count > 0)
+            {
+                var sourceText = string.IsNullOrWhiteSpace(source) ? "unknown" : source;
+                var summary = string.Join(", ", changedItems.ToArray());
+                this.PublishDebugOverlayInputDiagnostics(
+                    "InputDiagnosticsReloadSummary",
+                    this.debugOverlayReloadKey,
+                    "Changed",
+                    string.Format("Source={0}; {1}", sourceText, summary),
+                    string.Format("[ToolBarDateRunnerPolicy] Input diagnostics options reloaded: {0}.", summary));
+            }
         }
 
         private void UpdateConmentText(GameTime gameTime)

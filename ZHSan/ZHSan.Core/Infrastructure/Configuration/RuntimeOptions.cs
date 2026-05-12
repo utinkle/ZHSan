@@ -56,6 +56,10 @@ namespace ZHSan.Core.Infrastructure.Configuration
         public int DiagnosticsOverlayPersistenceRetryCount { get; set; } = 1;
         public int DiagnosticsOverlayPersistenceAlertThreshold { get; set; } = 1;
         public int DiagnosticsOverlayPersistenceAlertQuietWindowMs { get; set; } = 0;
+        public int InputDiagnosticsMinIntervalMs { get; set; } = 150;
+        public bool InputDiagnosticsEnableDedup { get; set; } = true;
+        public int InputDiagnosticsTrendWindowSeconds { get; set; } = 10;
+        public int InputDiagnosticsFirstSampleHintSeconds { get; set; } = 3;
     }
 
     public sealed class TabListProfileOptions

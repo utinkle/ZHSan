@@ -1,6 +1,12 @@
 {
   "ui": {
     "uiScale": 1.0,
+    "toolBarDateRunnerPolicy": {
+      "inputDiagnosticsMinIntervalMs": 150,
+      "inputDiagnosticsEnableDedup": true,
+      "inputDiagnosticsTrendWindowSeconds": 10,
+      "inputDiagnosticsFirstSampleHintSeconds": 3
+    },
     "tabListProfiles": {
       "overrides": [
         {
