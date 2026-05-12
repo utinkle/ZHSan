@@ -2,6 +2,7 @@ using ZHSan.Core.Infrastructure.Configuration;
 using ZHSan.Core.Presentation.UI.Services;
 using ZHSan.Core.Presentation.UI.Events;
 using ZHSan.Core.Presentation.UI.ViewModels;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -26,6 +27,8 @@ namespace ZHSan.Core.Presentation.UI.Adapters
         private bool showMiscGroup = true;
         private string currentPreset = "Debug";
         private string activeScrollGroup = "Cache";
+        private DateTime firstSampleHintExpireAtUtc = DateTime.MinValue;
+        private string firstSampleHintMarker;
 
         public ToolBarDateRunnerPolicyDebugOverlayAdapter(ToolBarDateRunnerPolicyDebugOverlay overlay, RuntimeOptions runtimeOptions, UiStyleTokens styleTokens)
         {
@@ -444,6 +447,39 @@ namespace ZHSan.Core.Presentation.UI.Adapters
                 snapshot.Action,
                 snapshot.Key,
                 snapshot.Result));
+            lines.Add(string.Format(
+                "Dedup={0}, WindowMs={1}, ElapsedMs={2:0.##}, Suppressed={3}",
+                snapshot.DedupEnabled ? "ON" : "OFF",
+                snapshot.DedupWindowMs,
+                snapshot.ElapsedSinceLastPublishedMs,
+                snapshot.SuppressedCount));
+            lines.Add(string.Format(
+                "Trend({0}s): Suppressed={1}, Published={2}, SuppressionRate={3:P0}",
+                snapshot.TrendWindowSeconds,
+                snapshot.TrendSuppressedCount,
+                snapshot.TrendPublishedCount,
+                snapshot.TrendSuppressionRate));
+            if (snapshot.IsFirstSampleAfterTrendWindowReload)
+            {
+                var marker = string.Format(
+                    "{0}|{1}|{2}|{3}",
+                    snapshot.Action,
+                    snapshot.Key,
+                    snapshot.Result,
+                    snapshot.TrendWindowSeconds);
+                if (!string.Equals(marker, this.firstSampleHintMarker, StringComparison.Ordinal))
+                {
+                    this.firstSampleHintMarker = marker;
+                    var hintSeconds = Math.Max(1, this.runtimeOptions?.Ui?.ToolBarDateRunnerPolicy?.InputDiagnosticsFirstSampleHintSeconds ?? 3);
+                    this.firstSampleHintExpireAtUtc = DateTime.UtcNow.AddSeconds(hintSeconds);
+                }
+            }
+
+            if (this.firstSampleHintExpireAtUtc > DateTime.UtcNow)
+            {
+                var remainSeconds = Math.Max(0, (int)Math.Ceiling((this.firstSampleHintExpireAtUtc - DateTime.UtcNow).TotalSeconds));
+                lines.Add(string.Format("TrendWindowReload: first sample confirmed (auto-hide in {0}s).", remainSeconds));
+            }
             if (!string.IsNullOrWhiteSpace(snapshot.Detail))
             {
                 lines.Add(snapshot.Detail);
