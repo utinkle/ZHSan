@@ -97,6 +97,21 @@ namespace ZHSan.Core.Infrastructure.Configuration
                     log?.Invoke("[RuntimeOptionsLoader] Invalid diagnosticsOverlayPersistenceAlertQuietWindowMs detected. Fallback to 0.");
                     options.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayPersistenceAlertQuietWindowMs = 0;
                 }
+                if (options.Ui.ToolBarDateRunnerPolicy.InputDiagnosticsMinIntervalMs < 0)
+                {
+                    log?.Invoke("[RuntimeOptionsLoader] Invalid inputDiagnosticsMinIntervalMs detected. Fallback to 150.");
+                    options.Ui.ToolBarDateRunnerPolicy.InputDiagnosticsMinIntervalMs = 150;
+                }
+                if (options.Ui.ToolBarDateRunnerPolicy.InputDiagnosticsTrendWindowSeconds <= 0)
+                {
+                    log?.Invoke("[RuntimeOptionsLoader] Invalid inputDiagnosticsTrendWindowSeconds detected. Fallback to 10.");
+                    options.Ui.ToolBarDateRunnerPolicy.InputDiagnosticsTrendWindowSeconds = 10;
+                }
+                if (options.Ui.ToolBarDateRunnerPolicy.InputDiagnosticsFirstSampleHintSeconds <= 0)
+                {
+                    log?.Invoke("[RuntimeOptionsLoader] Invalid inputDiagnosticsFirstSampleHintSeconds detected. Fallback to 3.");
+                    options.Ui.ToolBarDateRunnerPolicy.InputDiagnosticsFirstSampleHintSeconds = 3;
+                }
 
                 var category = options.Ui.ToolBarDateRunnerPolicy.DiagnosticsOverlayMinimumCategory;
                 if (!string.IsNullOrWhiteSpace(category))
